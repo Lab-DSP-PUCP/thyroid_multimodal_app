@@ -32,24 +32,31 @@ ALLOWED_IMG = {"png", "jpg", "jpeg", "bmp"}
 ALLOWED_XML = {"xml"}
 
 # Base y carpeta models (permite override por env var)
-
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR    = BASE_DIR / "static"
 MODELS_DIR    = Path(os.environ.get("MODELS_DIR", str(BASE_DIR / "models")))
 
+# --- Carga .env priorizando el que está junto al ejecutable (.exe) ---
+IS_FROZEN = getattr(sys, "frozen", False)
+EXEC_DIR = Path(sys.executable).parent if IS_FROZEN else Path(__file__).resolve().parent
+# 1) externo (carpeta del .exe) → 2) interno (BASE_DIR) → 3) si no hay .env, usa los defaults de os.environ.get(...)
+if (EXEC_DIR / ".env").exists():
+    load_dotenv(EXEC_DIR / ".env")
+elif (BASE_DIR / ".env").exists():
+    load_dotenv(BASE_DIR / ".env")
 
-load_dotenv()  # ← lee el .env
 app = Flask(
     __name__,
     template_folder=str(TEMPLATES_DIR),
     static_folder=str(STATIC_DIR)
 )
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 30 * 1024 * 1024
-app.secret_key = os.environ.get("SECRET_KEY", "change-me")
+app.secret_key = os.environ.get("SECRET_KEY", "asfkposafk14214i09j31oi1faspg8502kf142")
 
 # === ADMIN PASSWORD por entorno (o .env) ===
-app.config['ADMIN_PASSWORD'] = os.environ.get('ADMIN_PASSWORD', 'cambialo')
+app.config['ADMIN_PASSWORD'] = os.environ.get('ADMIN_PASSWORD', 'pruebaUltrasonido')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 
 DB_PATH = BASE_DIR / "thyroid.db"
