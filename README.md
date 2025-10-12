@@ -1,5 +1,5 @@
 ## 🚀 Uso rápido (Windows) — sin instalar nada
-1) Descarga **ThyroidAid.exe** desde [Releases](../releases/latest).
+1) Descarga **ThyroidAid.exe** desde [Releases]([../releases/latest](https://github.com/Lab-DSP-PUCP/thyroid_multimodal_app/releases)).
 2) Doble click y abre **http://127.0.0.1:5000**.
 
 > El ejecutable incluye el modelo y funciona **offline**.  
