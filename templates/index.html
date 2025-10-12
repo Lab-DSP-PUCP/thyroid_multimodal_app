@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Clasificador Multimodal · Tesis</title>
+    <script>
+    (function(){
+      try{
+        var saved = localStorage.getItem('theme');
+        if(!saved){ saved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+        document.documentElement.setAttribute('data-bs-theme', saved);
+      }catch(e){
+        document.documentElement.setAttribute('data-bs-theme', 'light');
+      }
+    })();
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <!-- Favicon pack -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}?v=1">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}?v=1">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}?v=1">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/favicon.ico') }}?v=1">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}?v=1">
+    <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
+    <meta name="theme-color" content="#0d6efd">
+  </head>
+
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark fancy-nav">
+      <div class="container">
+        <a class="navbar-brand fw-semibold mb-0" href="#">Clasificador de Nódulos Tiroideos</a>
+
+        <button id="theme-toggle" class="btn btn-sm btn-theme ms-3" type="button" aria-label="Cambiar tema">
+          <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="5"></circle>
+            <path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"></path>
+          </svg>
+          <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+
+        <button class="btn btn-sm btn-outline-light ms-2"
+                data-bs-toggle="modal"
+                data-bs-target="#tutorialModal">
+          ¿Cómo usar?
+        </button>
+
+        <div class="ms-auto d-flex align-items-center">
+          <img
+            src="{{ url_for('static', filename='images/logo_pucp.png') }}"
+            alt="PUCP"
+            class="logo-pucp"
+            onerror="this.style.display='none';">
+        </div>
+
+        <button id="btn-admin-login" class="btn btn-sm btn-outline-light ms-3" data-bs-toggle="modal" data-bs-target="#adminLoginModal">
+          Admin
+        </button>
+        <span id="admin-badge" class="badge bg-success ms-2 d-none">Admin activo</sp
+      </div>
+    </nav>
+
+    <main class="container my-4">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-info mt-3">
+              <strong>Nota:</strong> Si actualizas los metadatos (manualmente o con un XML), la predicción se recalculará automáticamente.
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <div class="row g-4 align-items-start">
+        <div class="col-lg-6">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title">Subida de datos</h5>
+
+              <form method="POST" action="{{ url_for('predict') }}" enctype="multipart/form-data">
+                <div class="mb-3">
+                  <label class="form-label">Ecografía (PNG/JPG/JPEG)</label>
+                  <input class="form-control" type="file" name="image" id="file" accept="image/*" required>
+                </div>
+
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="use-metadata-switch">
+                  <label class="form-check-label" for="use-metadata-switch">Usar metadatos (opcional)</label>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">ID Paciente <span class="text-danger">*</span></label>
+                  <input class="form-control" name="patient_id" placeholder="P-0001" required>
+                </div>
+
+                <div id = "metadata-section" class="d-none">
+                  <div class="mb-3">
+                    <label class="form-label">Datos clínicos en formato XML (opcional)</label>
+                    <input class="form-control" type="file" name="xmlfile" accept=".xml">
+                  </div>
+
+                  <hr>
+                  {% set fields = ['composition','echogenicity','margins','calcifications','sex'] %}
+                  <h6 class="text-muted">Si falta el archivo XML, llenar los siguientes campos:</h6>
+                  <div class="row">
+                    {% for field in fields %}
+                    <div class="col-md-6 mb-3">
+                      <label class="form-label">{{ ui_labels[field] }}</label>
+                      <select class="form-select" name="{{ field }}">
+                        <option value="" selected>—</option>
+                        {% for k, etiqueta in value_labels[field].items() %}
+                          <option value="{{ k }}">{{ etiqueta }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    {% endfor %}
+                    <div class="col-md-6 mb-3">
+                      <label class="form-label">{{ ui_labels['age'] }}</label>
+                      <input class="form-control" type="number" min="0" max="120" step="1" name="age" placeholder="45">
+                    </div>
+                  </div>
+                </div> <button class="btn btn-primary" type="submit">Analizar</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <h5 class="card-title">Resultados recientes</h5>
+
+              {% if history %}
+              <div class="results-wrap">
+                <div class="table-wrap">
+                  <div class="table-responsive">
+                    <table id="history-table" class="table table-sm align-middle">
+                      <thead>
+                        <tr>
+                          <th>Fecha</th>
+                          <th>Paciente</th>
+                          <th>Imagen</th>
+                          <th>XML</th>
+                          <th>Resultado</th>
+                          <th>Prob.</th>
+                          <th>Metadatos</th>
+                          <th>{{ ui_labels['composition'] }}</th>
+                          <th>{{ ui_labels['echogenicity'] }}</th>
+                          <th>{{ ui_labels['margins'] }}</th>
+                          <th>{{ ui_labels['calcifications'] }}</th>
+                          <th>{{ ui_labels['sex'] }}</th>
+                          <th>{{ ui_labels['age'] }}</th>
+                          <th>ROI</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for item in history %}
+                          <tr>
+                            <td class="text-nowrap d-flex align-items-center gap-2">
+                              <span class="ts">{{ item.timestamp }}</span>
+
+                              <button type="button" class="btn btn-sm btn-link p-0"
+                                      title="Editar" aria-label="Editar"
+                                      data-action="edit-h"
+                                      data-uid="{{ item.id }}"
+                                      data-json='{{ item|tojson }}'>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" role="img" focusable="false" aria-hidden="true">
+                                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"></path>
+                                </svg>
+                              </button>
+
+                              <button type="button" class="btn btn-sm btn-link p-0 text-danger"
+                                      title="Eliminar" aria-label="Eliminar"
+                                      data-action="del-h"
+                                      data-uid="{{ item.id }}">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" role="img" focusable="false" aria-hidden="true">
+                                  <path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path>
+                                </svg>
+                              </button>
+                            </td>
+
+                            <td data-col="patient">{{ item.patient_id }}</td>
+
+                            <td>
+                              {% if item.file and item.file != '-' %}
+                                <a href="{{ url_for('uploaded_file', filename=item.file) }}"
+                                  class="link-primary preview-link"
+                                  data-type="image"
+                                  data-file="{{ url_for('uploaded_file', filename=item.file) }}"
+                                  data-json='{{ item|tojson }}'
+                                  title="Ver imagen" aria-label="Ver imagen">
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M12 5C5 5 1 12 1 12s4 7 11 7 11-7 11-7-4-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"></path>
+                                  </svg>
+                                </a>
+                              {% else %}-{% endif %}
+                            </td>
+
+                            <td data-col="xml">
+                              {% if item.xml and item.xml != '-' %}
+                                <a href="{{ url_for('uploaded_file', filename=item.xml) }}"
+                                  class="link-primary preview-link open-fullscreen-image"
+                                  data-type="xml"
+                                  data-file="{{ url_for('uploaded_file', filename=item.xml) }}"
+                                  data-json='{{ item|tojson }}'
+                                  title="Ver XML" aria-label="Ver XML">
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16l5-2 5 2 6-2V6a4 4 0 0 0-4-4z"></path>
+                                    <path d="M9 9l-2 3 2 3M15 9l2 3-2 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                                  </svg>
+                                </a>
+                              {% else %}-{% endif %}
+                            </td>
+
+                            <td data-col="label">
+                              <span class="badge bg-{{ 'danger' if item.pred==1 else 'success' }}">{{ item.label }}</span>
+                            </td>
+                            <td data-col="prob">{{ '%.2f'|format(item.prob * 100) }}%</td>
+                            <td data-col="meta_used">
+                              <span class="badge bg-secondary">{{ 'Sí' if item.meta_used else 'No' }}</span>
+                            </td>
+
+                            <td class="text-nowrap" data-col="composition">
+                              {{ value_labels['composition'].get(item.composition, item.composition or '-') }}
+                            </td>
+                            <td class="text-nowrap" data-col="echogenicity">
+                              {{ value_labels['echogenicity'].get(item.echogenicity, item.echogenicity or '-') }}
+                            </td>
+                            <td class="text-nowrap" data-col="margins">
+                              {{ value_labels['margins'].get(item.margins, item.margins or '-') }}
+                            </td>
+                            <td class="text-nowrap" data-col="calcifications">
+                              {{ value_labels['calcifications'].get(item.calcifications, item.calcifications or '-') }}
+                            </td>
+                            <td class="text-nowrap" data-col="sex">
+                              {{ value_labels['sex'].get(item.sex, item.sex or '-') }}
+                            </td>
+
+                            <td class="text-nowrap" data-col="age">
+                              {{ item.age or '-' }}
+                            </td>
+
+                            <td data-col="roi">
+                              {% set c = 'info' if item.roi_source=='xml'
+                                else ('success' if item.roi_source=='meta'
+                                else ('warning' if item.roi_source=='unet'
+                                else 'secondary')) %}
+                              <span class="badge bg-{{ c }}">{{ roi_labels[item.roi_source] }}</span>
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div id="preview-pane" class="preview-pane mt-3">
+                  <h6 class="mb-2">Previsualización</h6>
+                  <div id="preview-content" class="text-muted">
+                    Haz clic en los íconos de <em>imagen</em> (ojo) o <em>XML</em> (archivo) para previsualizar aquí.
+                  </div>
+
+                  <button id="btn-explain" class="btn btn-primary btn-sm">
+                    Explicar predicción (Grad-CAM)
+                  </button>
+                  <button id="btn-fullscreen" type="button" class="btn btn-outline-secondary btn-sm ms-auto" title="Pantalla completa">
+                    ⤢
+                  </button>
+
+                  <div class="btn-group btn-group-sm ms-2" role="group" aria-label="Vista Grad-CAM">
+                    <input class="btn-check" type="radio" name="cam-view" id="camViewCrop" value="crop" autocomplete="off" checked>
+                    <label class="btn btn-outline-secondary" for="camViewCrop" title="CAM sobre el recorte que vio el modelo">Modelo</label>
+
+                    <input class="btn-check" type="radio" name="cam-view" id="camViewFull" value="full" autocomplete="off">
+                    <label class="btn btn-outline-secondary" for="camViewFull" title="CAM sobre la imagen completa">Completa</label>
+                  </div>
+
+                  <img id="original-view" class="img-fluid rounded mt-2 d-none" alt="Ecografía original">
+                </div>
+              </div>
+              {% else %}
+                <p class="text-muted">Aún no hay análisis realizados.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="modal fade" id="tutorialModal" tabindex="-1" aria-labelledby="tutorialModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="tutorialModalLabel">Video Tutorial</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+
+            <div class="ratio ratio-16x9 video-wrapper position-relative">
+              <video id="tutorial-video"
+                    controls
+                    controlsList="nodownload noremoteplayback"
+                    playsinline
+                    muted
+                    preload="metadata"
+                    poster="{{ url_for('static', filename='images/tutorial_poster.jpg') }}"
+                    oncontextmenu="return false">
+                <source src="{{ url_for('static', filename='video/video_tutorial.mp4') }}" type="video/mp4">
+                Tu navegador no soporta video HTML5.
+              </video>
+
+              <button type="button" class="video-overlay-play" aria-label="Reproducir" data-target="#tutorial-video">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+                  <path d="M8 5v14l11-7z"></path>
+                </svg>
+              </button>
+            </div>
+
+            <ol class="mt-3 small mb-0">
+              <li>Subir ecografía</li>
+              <li>(Opcional) Activar “Usar metadatos” y cargar XML o llenar campos</li>
+              <li>Clic en <strong>Analizar</strong> y revisar resultados</li>
+              <li>Usar <em>ver</em> / <em>xml</em> para previsualización</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="application/json" id="ui-json">{{ ui_labels|tojson }}</script>
+    <script type="application/json" id="val-json">{{ value_labels|tojson }}</script>
+    <script type="application/json" id="roi-json">{{ roi_labels|tojson }}</script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/preview.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/crud.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/viewer.js') }}?v=1" defer></script>
+
+    <div class="modal fade" id="editHistoryModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form id="edit-history-form">
+            <div class="modal-header">
+              <h5 class="modal-title">Editar metadatos del examen</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <input type="hidden" id="eh-id">
+              <div class="mb-2">
+                <label class="form-label">ID Paciente <span class="text-danger">*</span></label>
+                <input id="eh-patient" name="patient_id" class="form-control" required>
+              </div>
+
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label">Sexo</label>
+                  <select id="eh-sex" name = "sex" class="form-select">
+                    <option value=""></option>
+                    <option value="F">Femenino</option>
+                    <option value="M">Masculino</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Edad</label>
+                  <input id="eh-age" name="age" type="number" min="0" max="120" class="form-control" placeholder="Ej. 47">
+                </div>
+              </div>
+
+              <div class="row g-2 mt-1">
+                <div class="col-6">
+                  <label class="form-label">Composición</label>
+                  <input id="eh-composition" name="composition" class="form-control" placeholder="Sólido/Mixto/Quístico">
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Ecogenicidad</label>
+                  <input id="eh-echogenicity" name="echogenicity" class="form-control" placeholder="Hipoecoico/Isoecoico/...">
+                </div>
+              </div>
+
+              <div class="row g-2 mt-1">
+                <div class="col-6">
+                  <label class="form-label">Márgenes</label>
+                  <input id="eh-margins" name = "margins" class="form-control" placeholder="Lisos/Mal definidos/...">
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Calcificaciones</label>
+                  <input id="eh-calcs" name = "calcifications" class="form-control" placeholder="Ninguna/Micro/Macro/Periféricas">
+                </div>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label">XML (opcional)</label>
+                <input id="eh-xml" name="xmlfile" type="file" class="form-control" accept=".xml">
+                <div class="form-text">Si subes XML, se recalcula ROI y predicción usando el box del XML.</div>
+              </div>
+
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="eh-remove-xml" name="remove_xml">
+                <label class="form-check-label" for="eh-remove-xml">Quitar XML actual</label>
+              </div>
+              <div id="eh-xml-hint" class="form-text text-warning d-none">
+                Este registro tiene un <strong>XML</strong> guardado. Para editar manualmente,
+                marca <em>Quitar XML actual</em> o sube un nuevo XML.
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-primary" type="submit">Guardar</button>
+              <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="adminLoginModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form id="admin-login-form">
+            <div class="modal-header">
+              <h5 class="modal-title">Iniciar sesión de administrador</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <label class="form-label">Contraseña</label>
+              <input name="password" type="password" class="form-control" autocomplete="current-password" required>
+              <div class="form-text">Necesaria para editar, eliminar o recalcular con XML.</div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-primary" type="submit">Ingresar</button>
+              <button id="admin-logout" class="btn btn-outline-secondary" type="button">Cerrar sesión</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fullscreen Viewer Overlay -->
+    <div id="fs-viewer" class="fsv d-none" aria-hidden="true">
+      <div class="fsv-toolbar">
+        <button type="button" class="fsv-btn" data-fsv="zoom-in">+</button>
+        <button type="button" class="fsv-btn" data-fsv="zoom-out">−</button>
+        <button type="button" class="fsv-btn" data-fsv="reset">Reset</button>
+        <button type="button" class="fsv-btn" data-fsv="close">✕</button>
+      </div>
+      <div class="fsv-canvas" tabindex="0">
+        <img id="fsv-img" alt="Imagen" draggable="false">
+      </div>
+    </div>
+    <script type="application/json" id="val-json">{{ values_map|tojson }}</script>
+  </body>
+</html>

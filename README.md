@@ -1,4 +1,17 @@
-# thyroid_multimodal_app
-App ligera que carga un modelo de clasificación de benignidad/malignidad de tiroides.
-Se cuenta con un conjunto de imágenes y meta-datos de prueba en la siguiente carpeta de Drive:
-https://drive.google.com/drive/folders/17OMDOmK8qCGn3IjPJb1XcFY56NasNGZY?usp=sharing
+## 🚀 Uso rápido (Windows) — sin instalar nada
+1) Descarga **ThyroidAid.exe** desde [Releases](../releases/latest).
+2) Doble click y abre **http://127.0.0.1:5000**.
+
+> El ejecutable incluye el modelo y funciona **offline**.  
+> (Opcional) Carpeta de imágenes de prueba: [Drive](<tu_enlace_de_drive>).
+
+---
+
+## 👩‍💻 Modo desarrollador (opcional)
+```bat
+git clone https://github.com/Lab-DSP-PUCP/thyroid_multimodal_app.git
+cd thyroid_multimodal_app
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+python app.py

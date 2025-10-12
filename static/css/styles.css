@@ -1,0 +1,394 @@
+/* Variables por tema */
+:root {
+  /* Page */
+  --page-bg: #f5f6f8;
+  --page-fg: #212529;
+
+  /* Cards / borders */
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+
+  /* Textos secundarios */
+  --muted: #6c757d;
+
+  /* Navbar gradient */
+  --nav-grad-start: #0d6efd;
+  --nav-grad-end:   #0b5ed7;
+
+  /* Preview <pre> */
+  --pre-bg: rgba(0,0,0,.03);
+  --pre-border: #e5e7eb;
+
+  /* Badges suaves */
+  --badge-soft-success-bg: rgba(25,135,84,.15);
+  --badge-soft-success-text: #198754;
+  --badge-soft-danger-bg: rgba(220,53,69,.15);
+  --badge-soft-danger-text: #dc3545;
+
+  /* Accesibilidad focus ring */
+  --focus-ring: rgba(13,110,253,.35);
+
+  /* Transicion de tema */
+  --theme-dur: 520ms;
+  --theme-ease: cubic-bezier(.22,.61,.36,1);
+}
+
+:root[data-bs-theme="dark"] {
+  color-scheme: dark;
+
+  --page-bg: #0e1013;
+  --page-fg: #e6e9ee;
+
+  --card-bg: #15161a;
+  --card-border: #2a2d33;
+
+  --muted: #a0a6ad;
+
+  --nav-grad-start: #0b5ed7;
+  --nav-grad-end:   #0947a7;
+
+  --pre-bg: rgba(255,255,255,.05);
+  --pre-border: #2a2d33;
+
+  --badge-soft-success-bg: rgba(25,135,84,.30);
+  --badge-soft-success-text: #7ddca0;
+  --badge-soft-danger-bg: rgba(220,53,69,.30);
+  --badge-soft-danger-text: #ff9aa5;
+
+  --focus-ring: rgba(255,255,255,.35);
+}
+
+/* -----------------------
+   Fondo / tipografia global
+   ----------------------- */
+body {
+  background-color: var(--page-bg) !important;
+  color: var(--page-fg);
+}
+
+/* Si el body quedo con bg-light por herencia, neutralizar en dark */
+:root[data-bs-theme="dark"] .bg-light {
+  background-color: var(--page-bg) !important;
+}
+
+/* Navbar / Branding */
+.fancy-nav {
+  background: linear-gradient(90deg, var(--nav-grad-start), var(--nav-grad-end));
+}
+
+.logo-pucp {
+  height: 52px;
+  width: auto;
+  object-fit: contain;
+  opacity: .95;
+}
+@media (max-width: 576px){
+  .logo-pucp { height: 44px; }
+}
+
+/* Layout / Cards / Tables */
+.card {
+  background: var(--card-bg);
+  border-color: var(--card-border);
+}
+
+.card.shadow-sm {
+  box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
+}
+
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--card-border);
+}
+
+.text-muted { color: var(--muted) !important; }
+
+/* Panel de previsualizacion */
+.preview-pane {
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: .75rem;
+  padding: 1rem;
+}
+
+.preview-pre {
+  background: var(--pre-bg) !important;
+  border: 1px solid var(--pre-border) !important;
+  border-radius: .5rem;
+  padding: .75rem;
+  overflow: auto;
+  color: inherit;
+}
+
+:root[data-bs-theme="dark"] .preview-pane h6 { color: #d7dbe2; }
+
+/* Badges suaves para resultado */
+.badge-soft-success {
+  background-color: var(--badge-soft-success-bg);
+  color: var(--badge-soft-success-text);
+}
+.badge-soft-danger {
+  background-color: var(--badge-soft-danger-bg);
+  color: var(--badge-soft-danger-text);
+}
+
+/* Formularios */
+.form-control:focus,
+.form-select:focus {
+  box-shadow: 0 0 0 .25rem var(--focus-ring);
+  border-color: #86b7fe;
+}
+
+/* Boton de cambio de tema */
+.btn-theme {
+  padding: .35rem .55rem;
+  border-radius: .6rem;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+:root[data-bs-theme="dark"] .btn-theme{
+  color:#fff;
+  background:transparent;
+  border-color:rgba(255,255,255,.35);
+}
+:root[data-bs-theme="dark"] .btn-theme:hover{
+  background:rgba(255,255,255,.08);
+  border-color:rgba(255,255,255,.5);
+}
+/* Boton de tema en modo claro: alto contraste sobre navbar azul */
+:root[data-bs-theme="light"] .btn-theme{
+  color: #fff;
+  background: transparent;
+  border-color: rgba(255,255,255,.65);
+}
+:root[data-bs-theme="light"] .btn-theme:hover{
+  background: rgba(255,255,255,.18);
+  border-color: rgba(255,255,255,.85);
+}
+
+
+/* Sin contorno punteado; halo accesible */
+#theme-toggle{ outline:none !important; box-shadow:none !important; }
+#theme-toggle::-moz-focus-inner{ border:0; }
+
+/* Focus ring SOLO con teclado (no con click/touch) */
+#theme-toggle:focus-visible {
+  box-shadow: 0 0 0 .25rem var(--focus-ring) !important;
+  border-color: currentColor;
+}
+
+/* Evita estilos heredados que metan fondo blanco accidentalmente */
+:root[data-bs-theme="dark"] #theme-toggle.btn-outline-light,
+:root[data-bs-theme="dark"] #theme-toggle.btn-outline-light:hover,
+:root[data-bs-theme="dark"] #theme-toggle.btn-outline-light:focus {
+  background: transparent !important;
+  color: #fff !important;
+  border-color: rgba(255,255,255,.35) !important;
+  box-shadow: none !important;
+}
+
+/* Iconos del boton segun tema */
+.btn-theme svg{ display:block; width:18px; height:18px; vertical-align:middle; }
+
+/* Por defecto (tema claro): se oculta la luna */
+.btn-theme .icon-moon{ display:none; }
+
+/* En tema oscuro: se oculta el sol y se muestra la luna */
+:root[data-bs-theme="dark"] .btn-theme .icon-sun{ display:none; }
+:root[data-bs-theme="dark"] .btn-theme .icon-moon{ display:block; }
+
+
+
+/* Transicion de tema */
+/* Activamos transicion solo durante el toggle: añadir .theme-animating al <html> */
+:root.theme-animating body,
+:root.theme-animating .card,
+:root.theme-animating .navbar,
+:root.theme-animating .table,
+:root.theme-animating .btn,
+:root.theme-animating .form-control,
+:root.theme-animating .form-select,
+:root.theme-animating .alert,
+:root.theme-animating .badge,
+:root.theme-animating .preview-pane {
+  transition:
+    background-color var(--theme-dur) var(--theme-ease),
+    color            var(--theme-dur) var(--theme-ease),
+    border-color     var(--theme-dur) var(--theme-ease);
+}
+
+/* Antiflicker: input file y bloque <pre> */
+:root.theme-animating input[type="file"],
+:root.theme-animating input[type="file"]::file-selector-button,
+:root.theme-animating input[type="file"]::-webkit-file-upload-button,
+:root.theme-animating .preview-pre,
+:root.theme-animating .preview-pre * {
+  transition: none !important;
+}
+
+/* Respeta reduccion de movimiento */
+@media (prefers-reduced-motion: reduce){
+  :root.theme-animating body,
+  :root.theme-animating .card,
+  :root.theme-animating .navbar,
+  :root.theme-animating .table,
+  :root.theme-animating .btn,
+  :root.theme-animating .form-control,
+  :root.theme-animating .form-select,
+  :root.theme-animating .alert,
+  :root.theme-animating .badge,
+  :root.theme-animating .preview-pane {
+    transition: none !important;
+  }
+}
+
+/* Utilitarios */
+.text-nowrap { white-space: nowrap; }
+
+/* Sin halo cuando el foco viene de mouse/touch */
+#use-metadata-switch:focus:not(:focus-visible){
+  outline: none !important;
+  box-shadow: none !important;
+}
+/* Con halo solo cuando navegas con teclado (Tab) */
+#use-metadata-switch:focus-visible{
+  box-shadow: 0 0 0 .25rem var(--focus-ring) !important;
+  border-color: currentColor;
+}
+
+/* Video modal: overlay play + temas */
+.video-wrapper { position: relative; }
+.video-overlay-play{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:64px; height:64px; border-radius:9999px;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid transparent; cursor:pointer;
+  transition: background-color .2s ease, border-color .2s ease, opacity .2s ease;
+}
+:root[data-bs-theme="light"] .video-overlay-play{
+  background: rgba(255,255,255,.75);
+  color:#0b5ed7;
+  border-color: rgba(0,0,0,.15);
+}
+:root[data-bs-theme="dark"] .video-overlay-play{
+  background: rgba(0,0,0,.55);
+  color:#fff;
+  border-color: rgba(255,255,255,.25);
+}
+.video-overlay-play:hover{ filter: brightness(1.05); }
+.video-overlay-play.hidden{ opacity:0; pointer-events:none; }
+
+/* Evitar que algun navegador muestre boton de descarga nativo */
+video::-internal-media-controls-download-button{ display:none; }
+video::-webkit-media-controls-enclosure{ overflow:hidden; }
+
+/* Mantiene el alto y muestra spinner superpuesto */
+.preview-pane { position: relative; min-height: 260px; }
+.preview-spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+}
+.preview-spinner.d-none { display: none !important; }
+/*------------------------------------------------------------------------------*/
+.table th, .table td {
+  vertical-align: middle; /* Alineacion vertical para texto */
+  text-align: center;     /* Alineacion horizontal para las celdas */
+  padding: 12px 15px; /* Mas espaciado entre las celdas */
+}
+
+/* Mejora la separacion entre filas */
+.table tr {
+  border-bottom: 1px solid var(--card-border);
+}
+
+/* Full-screen viewer styles */
+.fsv{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:2000;display:flex;flex-direction:column}
+.fsv.d-none{display:none}
+.fsv-toolbar{display:flex;gap:.5rem;padding:.5rem;justify-content:flex-end}
+.fsv-btn{background:#222;border:1px solid #444;color:#eee;padding:.4rem .6rem;border-radius:.4rem;cursor:pointer}
+.fsv-btn:hover{background:#333}
+.fsv-canvas{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:grab}
+.fsv-canvas:active{cursor:grabbing}
+#fsv-img{max-width:none;max-height:none;transform-origin:0 0;will-change:transform}
+
+/* Layout de resultados: columna con tabla (scroll propio) + preview fijo debajo */
+.results-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;           /* para que no colapse si hay pocos registros */
+}
+
+/* La tabla tiene su propio alto y scroll independiente */
+.table-wrap {
+  /* define la altura deseada para que la tabla haga scroll dentro del card */
+  max-height: 48vh;            /* ~media pantalla; ajusta a gusto */
+  overflow: auto;              /* vertical y horizontal según se necesite */
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  padding-bottom: .25rem;
+}
+
+/* El panel de preview ya no hereda el scroll de la tabla */
+.preview-pane {
+  position: relative;          /* normal flow */
+  background: rgba(255,255,255,.02);
+  border-radius: .5rem;
+  padding: .75rem;
+}
+
+/* La imagen de preview nunca empuja ancho del card */
+.preview-pane img,
+#preview-content img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Fullscreen viewer */
+.fsv {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.85);
+  z-index: 1055;            /* por encima de modals/bootstrap (1050) */
+  display: block;
+}
+
+.fsv-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;       /* evita scroll de la página mientras haces pan/zoom */
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.fsv-toolbar {
+  position: absolute;
+  top: .75rem;
+  right: .75rem;
+  display: flex;
+  gap: .5rem;
+  z-index: 1;
+}
+
+.fsv-btn {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  color: #fff;
+  border-radius: .375rem;
+  padding: .25rem .5rem;
+  font-weight: 600;
+}
+.fsv-btn:hover { background: rgba(255,255,255,.2); }
+
+#fsv-img {
+  position: absolute;
+  top: 0; left: 0;
+  will-change: transform;
+  transform-origin: 0 0;  /* importante para translate + scale */
+  max-width: none;        /* control total con transform */
+}

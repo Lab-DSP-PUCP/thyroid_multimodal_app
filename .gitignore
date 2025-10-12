@@ -205,3 +205,23 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# Datos temporales / evidencias
+uploads/
+outputs/
+evidence/
+*.log
+thyroid.db
+*.db
+
+# Entornos / build
+.venv/
+venv/
+build/
+dist/
+*.spec
+
+# SO
+.DS_Store
+Thumbs.db

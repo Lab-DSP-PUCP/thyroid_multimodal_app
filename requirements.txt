@@ -1,0 +1,16 @@
+# Requerimientos para la app (compatibles con Python 3.13, CPU-only)
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+Flask>=3.0,<4
+Flask-SQLAlchemy>=3.1,<4
+SQLAlchemy>=2.0,<3
+python-dotenv>=1.0,<2
+
+Pillow>=10,<11
+numpy>=2.0,<3
+opencv-python>=4.10,<5
+matplotlib>=3.9,<4
+
+# PyTorch CPU y torchvision para Python 3.13
+torch==2.8.0+cpu
+torchvision==0.23.0+cpu
