@@ -3,7 +3,7 @@
 2) Doble click y abre **http://127.0.0.1:5000**.
 
 > El ejecutable incluye el modelo y funciona **offline**.  
-> (Opcional) Carpeta de imágenes de prueba: [Drive](<tu_enlace_de_drive>).
+> Carpeta de imágenes y meta-datos de prueba: [Drive](https://drive.google.com/drive/folders/17OMDOmK8qCGn3IjPJb1XcFY56NasNGZY?usp=drive_link).
 
 ---
 
