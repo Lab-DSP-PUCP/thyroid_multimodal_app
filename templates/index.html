@@ -17,7 +17,6 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <!-- Favicon pack -->
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}?v=1">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}?v=1">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}?v=1">
@@ -64,11 +63,17 @@
     </nav>
 
     <main class="container my-4">
+      {# Flash messages reales #}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for category, message in messages %}
-            <div class="alert alert-info mt-3">
-              <strong>Nota:</strong> Si actualizas los metadatos (manualmente o con un XML), la predicción se recalculará automáticamente.
+            {% set bs = 'info' %}
+            {% if category in ['error','danger'] %}{% set bs = 'danger' %}
+            {% elif category == 'warning' %}{% set bs = 'warning' %}
+            {% elif category == 'success' %}{% set bs = 'success' %}{% endif %}
+            <div class="alert alert-{{ bs }} alert-dismissible fade show mt-3" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
             </div>
           {% endfor %}
         {% endif %}
@@ -110,15 +115,15 @@
                       <label class="form-label">{{ ui_labels[field] }}</label>
                       <select class="form-select" name="{{ field }}">
                         <option value="" selected>—</option>
-                        {% for k, etiqueta in value_labels[field].items() %}
-                          <option value="{{ k }}">{{ etiqueta }}</option>
+                        {% for k in ui_keys[field] %}
+                          <option value="{{ k }}">{{ value_labels[field].get(k, k|replace('_',' ')|title) }}</option>
                         {% endfor %}
                       </select>
                     </div>
                     {% endfor %}
                     <div class="col-md-6 mb-3">
                       <label class="form-label">{{ ui_labels['age'] }}</label>
-                      <input class="form-control" type="number" min="0" max="120" step="1" name="age" placeholder="45">
+                      <input class="form-control" type="number" min="0" max="120" step="1" name="age">
                     </div>
                   </div>
                 </div> <button class="btn btn-primary" type="submit">Analizar</button>
@@ -144,7 +149,7 @@
                           <th>Imagen</th>
                           <th>XML</th>
                           <th>Resultado</th>
-                          <th>Prob.</th>
+                          <th>Prob. (%) - malignidad</th>
                           <th>Metadatos</th>
                           <th>{{ ui_labels['composition'] }}</th>
                           <th>{{ ui_labels['echogenicity'] }}</th>
@@ -182,7 +187,6 @@
                             </td>
 
                             <td data-col="patient">{{ item.patient_id }}</td>
-
                             <td>
                               {% if item.file and item.file != '-' %}
                                 <a href="{{ url_for('uploaded_file', filename=item.file) }}"
@@ -201,7 +205,7 @@
                             <td data-col="xml">
                               {% if item.xml and item.xml != '-' %}
                                 <a href="{{ url_for('uploaded_file', filename=item.xml) }}"
-                                  class="link-primary preview-link open-fullscreen-image"
+                                  class="link-primary preview-link"
                                   data-type="xml"
                                   data-file="{{ url_for('uploaded_file', filename=item.xml) }}"
                                   data-json='{{ item|tojson }}'
@@ -237,11 +241,9 @@
                             <td class="text-nowrap" data-col="sex">
                               {{ value_labels['sex'].get(item.sex, item.sex or '-') }}
                             </td>
-
                             <td class="text-nowrap" data-col="age">
                               {{ item.age or '-' }}
                             </td>
-
                             <td data-col="roi">
                               {% set c = 'info' if item.roi_source=='xml'
                                 else ('success' if item.roi_source=='meta'
@@ -268,12 +270,12 @@
                     ⤢
                   </button>
 
-                  <div class="btn-group btn-group-sm ms-2" role="group" aria-label="Vista Grad-CAM">
-                    <input class="btn-check" type="radio" name="cam-view" id="camViewCrop" value="crop" autocomplete="off" checked>
-                    <label class="btn btn-outline-secondary" for="camViewCrop" title="CAM sobre el recorte que vio el modelo">Modelo</label>
-
-                    <input class="btn-check" type="radio" name="cam-view" id="camViewFull" value="full" autocomplete="off">
+                  <div id="cam-controls" class="btn-group btn-group-sm ms-2" role="group" aria-label="Vista Grad-CAM">
+                    <input class="btn-check" type="radio" name="cam-view" id="camViewFull" value="full" autocomplete="off" checked>
                     <label class="btn btn-outline-secondary" for="camViewFull" title="CAM sobre la imagen completa">Completa</label>
+
+                    <input class="btn-check" type="radio" name="cam-view" id="camViewCrop" value="crop" autocomplete="off">
+                    <label class="btn btn-outline-secondary" for="camViewCrop" title="CAM sobre el recorte que vio el modelo">Modelo</label>
                   </div>
 
                   <img id="original-view" class="img-fluid rounded mt-2 d-none" alt="Ecografía original">
@@ -292,7 +294,7 @@
       <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="tutorialModalLabel">Video Tutorial</h5>
+            <h5 class="modal-title" id="tutorialModalLabel">Video Tutorial y Manual de Uso</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
           </div>
           <div class="modal-body">
@@ -323,14 +325,25 @@
               <li>Clic en <strong>Analizar</strong> y revisar resultados</li>
               <li>Usar <em>ver</em> / <em>xml</em> para previsualización</li>
             </ol>
+
+            <!-- === Acciones del manual (dentro del modal ¿Cómo usar?) === -->
+            <div class="help-actions d-flex flex-column flex-sm-row justify-content-center gap-3 mt-4">
+              <a class="btn btn-primary btn-lg px-4"
+                href="{{ url_for('static', filename='docs/ManualUsuario_Aplicacion.pdf') }}"
+                target="_blank" rel="noopener">
+                Abrir manual (PDF)
+              </a>
+
+              <a class="btn btn-primary btn-lg px-4"
+                href="{{ url_for('static', filename='docs/ManualUsuario_Aplicacion.pdf') }}"
+                download>
+                Descargar PDF
+              </a>
+            </div>
           </div>
         </div>
       </div>
     </div>
-
-    <script type="application/json" id="ui-json">{{ ui_labels|tojson }}</script>
-    <script type="application/json" id="val-json">{{ value_labels|tojson }}</script>
-    <script type="application/json" id="roi-json">{{ roi_labels|tojson }}</script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/preview.js') }}?v=4"></script>
@@ -352,43 +365,6 @@
                 <input id="eh-patient" name="patient_id" class="form-control" required>
               </div>
 
-              <div class="row g-2">
-                <div class="col-6">
-                  <label class="form-label">Sexo</label>
-                  <select id="eh-sex" name = "sex" class="form-select">
-                    <option value=""></option>
-                    <option value="F">Femenino</option>
-                    <option value="M">Masculino</option>
-                  </select>
-                </div>
-                <div class="col-6">
-                  <label class="form-label">Edad</label>
-                  <input id="eh-age" name="age" type="number" min="0" max="120" class="form-control" placeholder="Ej. 47">
-                </div>
-              </div>
-
-              <div class="row g-2 mt-1">
-                <div class="col-6">
-                  <label class="form-label">Composición</label>
-                  <input id="eh-composition" name="composition" class="form-control" placeholder="Sólido/Mixto/Quístico">
-                </div>
-                <div class="col-6">
-                  <label class="form-label">Ecogenicidad</label>
-                  <input id="eh-echogenicity" name="echogenicity" class="form-control" placeholder="Hipoecoico/Isoecoico/...">
-                </div>
-              </div>
-
-              <div class="row g-2 mt-1">
-                <div class="col-6">
-                  <label class="form-label">Márgenes</label>
-                  <input id="eh-margins" name = "margins" class="form-control" placeholder="Lisos/Mal definidos/...">
-                </div>
-                <div class="col-6">
-                  <label class="form-label">Calcificaciones</label>
-                  <input id="eh-calcs" name = "calcifications" class="form-control" placeholder="Ninguna/Micro/Macro/Periféricas">
-                </div>
-              </div>
-
               <div class="mb-2">
                 <label class="form-label">XML (opcional)</label>
                 <input id="eh-xml" name="xmlfile" type="file" class="form-control" accept=".xml">
@@ -402,6 +378,65 @@
               <div id="eh-xml-hint" class="form-text text-warning d-none">
                 Este registro tiene un <strong>XML</strong> guardado. Para editar manualmente,
                 marca <em>Quitar XML actual</em> o sube un nuevo XML.
+              </div>
+
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label">Sexo</label>
+                  <select id="eh-sex" name = "sex" class="form-select">
+                    {% for k in ui_keys["sex"] %}
+                      <option value="{{ k }}">{{ value_labels["sex"].get(k, k.replace('_',' ').title()) }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Edad</label>
+                  <input id="eh-age" name="age" type="number" min="0" max="120" class="form-control" placeholder="Ej. 47">
+                </div>
+              </div>
+
+              <div class="row g-2 mt-1">
+                <div class="col-6">
+                  <label class="form-label">Composición</label>
+                  <select id="eh-composition" name="composition" class="form-select">
+                    <option value=""></option>
+                    {% for k in ui_keys["composition"] %}
+                      <option value="{{ k }}">{{ value_labels["composition"].get(k, k.replace('_',' ').title()) }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="col-6">
+                  <label class="form-label">Ecogenicidad</label>
+                  <select id="eh-echogenicity" name="echogenicity" class="form-select">
+                    <option value=""></option>
+                    {% for k in ui_keys["echogenicity"] %}
+                      <option value="{{ k }}">{{ value_labels["echogenicity"].get(k, k.replace('_',' ').title()) }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+
+              <div class="row g-2 mt-1">
+                <div class="col-6">
+                  <label class="form-label">Márgenes</label>
+                  <select id="eh-margins" name="margins" class="form-select">
+                    <option value=""></option>
+                    {% for k in ui_keys["margins"] %}
+                      <option value="{{ k }}">{{ value_labels["margins"].get(k, k.replace('_',' ').title()) }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="col-6">
+                  <label class="form-label">Calcificaciones</label>
+                  <select id="eh-calcs" name="calcifications" class="form-select">
+                    <option value=""></option>
+                    {% for k in ui_keys["calcifications"] %}
+                      <option value="{{ k }}">{{ value_labels["calcifications"].get(k, k.replace('_',' ').title()) }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
               </div>
             </div>
             <div class="modal-footer">
@@ -435,7 +470,7 @@
       </div>
     </div>
 
-    <!-- Fullscreen Viewer Overlay -->
+    <!-- Fullscreen viewer overlay -->
     <div id="fs-viewer" class="fsv d-none" aria-hidden="true">
       <div class="fsv-toolbar">
         <button type="button" class="fsv-btn" data-fsv="zoom-in">+</button>
@@ -447,6 +482,8 @@
         <img id="fsv-img" alt="Imagen" draggable="false">
       </div>
     </div>
-    <script type="application/json" id="val-json">{{ values_map|tojson }}</script>
+    <script type="application/json" id="val-json">{{ value_labels|tojson }}</script>
+    <script type="application/json" id="ui-keys-json">{{ ui_keys|tojson }}</script>
+    <script type="application/json" id="roi-json">{{ roi_labels|tojson }}</script>
   </body>
 </html>

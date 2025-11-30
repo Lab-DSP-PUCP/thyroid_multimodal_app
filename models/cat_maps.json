@@ -1,0 +1,40 @@
+{
+  "composition": {
+    "solid": 0,
+    "predominantly cystic": 1,
+    "predominantly solid": 2,
+    "spongiform": 3,
+    "": 4,
+    "dense": 5,
+    "cystic": 6
+  },
+  "echogenicity": {
+    "hyperechogenicity": 0,
+    "hypoechogenicity": 1,
+    "marked hypoechogenicity": 2,
+    "isoechogenicity": 3,
+    "": 4
+  },
+  "margins": {
+    "spiculated": 0,
+    "well defined": 1,
+    "ill defined": 2,
+    "well defined smooth": 3,
+    "microlobulated": 4,
+    "macrolobulated": 5,
+    "ill- defined": 6,
+    "": 7
+  },
+  "calcifications": {
+    "microcalcifications": 0,
+    "non": 1,
+    "macrocalcifications": 2,
+    "microcalcification": 3,
+    "macrocalcification": 4
+  },
+  "sex": {
+    "F": 0,
+    "u": 1,
+    "M": 2
+  }
+}

@@ -51,7 +51,7 @@
   function appendClinicalFromRow(fd, item){
     if (!item) return;
     fd.append('use_clinical','1');
-    // Se toman los campos del item si es que existen:
+    // Se toman los campos del item si es que existen
     ['composition','echogenicity','margins','calcifications','sex','age'].forEach(k=>{
       if (item[k] !== undefined && item[k] !== null && item[k] !== '') {
         fd.append(k, item[k]);

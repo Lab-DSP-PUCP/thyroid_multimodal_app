@@ -1,4 +1,3 @@
-# db_models.py
 from datetime import date, datetime
 from sqlalchemy import CheckConstraint, ForeignKey, event # type: ignore
 from sqlalchemy.orm import object_session # type: ignore
@@ -7,9 +6,7 @@ from flask_sqlalchemy import SQLAlchemy # type: ignore
 db = SQLAlchemy()
 
 
-# ----------------------
 # Entidad Paciente
-# ----------------------
 class Patient(db.Model):
     __tablename__ = "patients"
 
@@ -29,10 +26,7 @@ class Patient(db.Model):
         CheckConstraint("length(trim(code)) > 0", name="ck_pat_code_nonempty"),
     )
 
-
-# ----------------------
 # Resultado / Examen
-# ----------------------
 class Result(db.Model):
     __tablename__ = "results"
     id            = db.Column(db.Integer, primary_key=True)
@@ -50,7 +44,7 @@ class Result(db.Model):
     pred_prob     = db.Column(db.Float)
     used_metadata = db.Column(db.Boolean, default=False)
 
-    # metadatos clínicos que ALIMENTAN al modelo
+    # metadatos clinicos que alimentan al modelo
     sex           = db.Column(db.String(1))     # 'F'/'M'
     age           = db.Column(db.Integer)
     composition   = db.Column(db.String(64))
@@ -95,10 +89,7 @@ class Result(db.Model):
                     changed = True
         return changed
 
-
-# ----------------------
-# Normalización ligera (sin autocalcular)
-# ----------------------
+# Normalizacion ligera (sin autocalcular)
 def _clamp_age(v):
     try:
         v = int(v)
@@ -112,7 +103,6 @@ def result_before_insert(mapper, connection, target: Result):
     if isinstance(target.sex, str):
         s = target.sex.strip().upper()[:1]
         target.sex = s if s in ("F", "M") else None
-    # Edad válida si llegó
     target.age = _clamp_age(target.age)
 
 @event.listens_for(Result, "before_update")

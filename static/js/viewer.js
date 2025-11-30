@@ -1,4 +1,3 @@
-// static/js/viewer.js
 (() => {
   const overlay = document.getElementById('fs-viewer');
   if (!overlay) return;
@@ -9,10 +8,10 @@
 
   // Estado
   let scale = 1, minScale = 1, maxScale = 8;
-  let tx = 0, ty = 0;           // translate X/Y
+  let tx = 0, ty = 0;           // X/Y
   let isPanning = false;
   let startX = 0, startY = 0;   // pointer down
-  let startTx = 0, startTy = 0; // translate al inicio del pan
+  let startTx = 0, startTy = 0; // al inicio del pan
 
   // Util
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -66,7 +65,7 @@
     const iy = (cy - ty) / scale;
 
     const newScale = clamp(scale * factor, minScale, maxScale);
-    // re-ubicar para mantener el punto bajo el cursor
+    // re ubicar para mantener el punto bajo el cursor
     tx = cx - ix * newScale;
     ty = cy - iy * newScale;
     scale = newScale;
@@ -96,16 +95,16 @@
     zoomAt(e.clientX, e.clientY, 1.6);
   });
 
-  // Rueda = zoom en cursor (sin Ctrl también)
+  // Rueda = zoom en cursor (sin Ctrl tambien)
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const dir = e.deltaY > 0 ? 1/1.15 : 1.15;
     zoomAt(e.clientX, e.clientY, dir);
   }, { passive: false });
 
-  // Pan con Pointer Events + captura (soluciona “se sigue arrastrando”)
+  // Pan con Pointer Events + captura
   canvas.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return; // solo botón izquierdo
+    if (e.button !== 0) return;
     isPanning = true;
     startX = e.clientX;
     startY = e.clientY;
@@ -131,14 +130,12 @@
   }
   canvas.addEventListener('pointerup', endPan);
   canvas.addEventListener('pointercancel', endPan);
-  // Por si acaso, si sale del overlay:
   overlay.addEventListener('pointerup', endPan);
   overlay.addEventListener('pointercancel', endPan);
 
   // Evita drag nativo del <img>
   img.addEventListener('dragstart', (e) => e.preventDefault());
 
-  // Exponer API mínima para que lo abras desde otros scripts
   window.FSViewer = {
     open, close, reset: fitToContainer
   };

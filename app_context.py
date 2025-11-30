@@ -1,4 +1,3 @@
-# app_context.py
 from typing import Any, Callable, Optional
 
 wrapper: Any = None

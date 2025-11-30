@@ -1,4 +1,3 @@
-# imports que estás usando pero no aparecen al inicio
 import torch #type: ignore
 from pathlib import Path
 from PIL import Image, ImageDraw #type: ignore
@@ -9,9 +8,8 @@ from dotenv import load_dotenv  # type: ignore
 from flask import Flask, request, session, redirect, url_for, flash, render_template, send_from_directory, jsonify # type: ignore
 import sys
 
-# tus módulos internos (usa el "barrel" que propuse)
 from core import (
-  ctx,                      # contexto compartido
+  ctx, # contexto compartido
   allowed_file, load_cat_maps, encode_clinical_with_mask,
   canonicalize_meta, _parse_xml_meta,
   ThyroidAppWrapper, ModelNotReadyError,
@@ -19,10 +17,10 @@ from core import (
 )
 from gradcam_utils import GradCAM, overlay_cam_on_full, overlay_cam_on_pil
 
-# base de datos y blueprint (si los usas)
+# base de datos y blueprint
 from db_models import db
 from api_history_bp import bp as history_api_bp
-from datetime import datetime, timedelta  # en vez de solo timedelta
+from datetime import datetime, timedelta
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -36,10 +34,10 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR    = BASE_DIR / "static"
 MODELS_DIR    = Path(os.environ.get("MODELS_DIR", str(BASE_DIR / "models")))
 
-# --- Carga .env priorizando el que está junto al ejecutable (.exe) ---
+# Carga .env priorizando el que esta junto al ejecutable (.exe)
 IS_FROZEN = getattr(sys, "frozen", False)
 EXEC_DIR = Path(sys.executable).parent if IS_FROZEN else Path(__file__).resolve().parent
-# 1) externo (carpeta del .exe) → 2) interno (BASE_DIR) → 3) si no hay .env, usa los defaults de os.environ.get(...)
+# externo (carpeta del .exe) -> interno (BASE_DIR) -> si no hay .env, usa los defaults de os.environ.get
 if (EXEC_DIR / ".env").exists():
     load_dotenv(EXEC_DIR / ".env")
 elif (BASE_DIR / ".env").exists():
@@ -55,7 +53,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 30 * 1024 * 1024
 app.secret_key = os.environ.get("SECRET_KEY", "asfkposafk14214i09j31oi1faspg8502kf142")
 
-# === ADMIN PASSWORD por entorno (o .env) ===
+# ADMIN PASSWORD por entorno (o .env)
 app.config['ADMIN_PASSWORD'] = os.environ.get('ADMIN_PASSWORD', 'pruebaUltrasonido')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 
@@ -105,7 +103,7 @@ if Path(UNET_PTH).exists():
 else:
     app.logger.warning(f"[U-Net] no encontrada en {UNET_PTH}; fallback a center-crop cuando falte ROI.")
 
-# 1) Intenta leer cat_maps desde el checkpoint (si lo trae)
+# Intenta leer cat_maps desde el checkpoint (si lo trae)
 ck_cat_maps = None
 try:
     _ck = torch.load(WEIGHTS, map_location="cpu")
@@ -114,12 +112,12 @@ try:
 except Exception:
     pass  # si falla, sigue con el JSON
 
-# 2) Lee cat_maps del JSON de disco
+# Lee cat_maps del JSON de disco
 file_cat_maps = load_cat_maps(CAT_MAPS_PATH)
 
 SENTINELS = {"", "-", "none", "null", "n/a"}
 
-# 3) Decide el mapping definitivo: prioriza el del checkpoint si existe
+# Decide el mapping definitivo: prioriza el del checkpoint si existe
 def _canon(m):  # para comparar por orden de claves (define el one-hot)
     return {
         k: list(m[k].keys()) if isinstance(m[k], dict) else list(m[k])
@@ -132,14 +130,169 @@ if ck_cat_maps is not None and _canon(ck_cat_maps) != _canon(file_cat_maps):
 else:
     cat_maps = file_cat_maps
 
-# 4) Dimension tabular con el mapping definitivo
-tabular_input_dim = (
-    len(cat_maps["composition"]) +
-    len(cat_maps["echogenicity"]) +
-    len(cat_maps["margins"]) +
-    len(cat_maps["calcifications"]) +
-    len(cat_maps["sex"]) + 1  # + age
-)
+SENTINELS = {"", "-", "null", "none", "n/a"}  # para filtrar en UI
+
+def _canonicalize_keys(cm: dict) -> dict:
+    """
+    Unifica claves equivalentes y define el orden de las opciones que la UI
+    mostrara. Se normaliza especialmente 'margins' para evitar duplicados
+    como 'ill defined' vs 'ill- defined'.
+    """
+    prefer = {
+        "composition": [
+            "solid", "predominantly solid", "spongiform",
+            "predominantly cystic", "dense", "cystic", "mixed"
+        ],
+        "echogenicity": [
+            "marked hypoechogenicity", "hypoechogenicity",
+            "isoechogenicity", "hyperechogenicity"
+        ],
+        "margins": [
+            "well defined", "ill defined", "well defined smooth",
+            "microlobulated", "macrolobulated", "spiculated"
+        ],
+        "calcifications": ["none", "microcalcification", "macrocalcification", "peripheral"],
+        "sex": ["F", "M"],
+    }
+
+    # aliases/normalizadores especificos
+    squash_alias = {
+        "calcifications": {"non": "none"},
+    }
+
+    def _norm_calc(k: str) -> str:
+        kl = k.lower().strip()
+        if kl.startswith("microcalcification"):
+            return "microcalcification"
+        if kl.startswith("macrocalcification"):
+            return "macrocalcification"
+        return squash_alias.get("calcifications", {}).get(kl, k)
+
+    def _norm_margin(k: str) -> str:
+        kl = k.strip().lower()
+        # variantes -> una sola key canonica
+        if kl in ("ill- defined", "ill_defined"):
+            return "ill defined"
+        # subrayado -> con espacio
+        if kl in ("well_defined",):
+            return "well defined"
+        # alias 'smooth' -> key real del modelo
+        if kl in ("smooth",):
+            return "well defined smooth"
+        return k
+
+    canon = {}
+    for field, order in prefer.items():
+        keys = list(cm.get(field, {}).keys())
+        out = []
+        seen = set()
+        for k in keys:
+            if k in SENTINELS:
+                continue
+            if field == "sex" and k.lower() == "u":  # descarta 'u'
+                continue
+            # aplica normalizadores por campo
+            if field == "calcifications":
+                k2 = _norm_calc(k)
+            elif field == "margins":
+                k2 = _norm_margin(k)
+            else:
+                k2 = k
+            if k2 not in seen:
+                out.append(k2)
+                seen.add(k2)
+
+        # respeta el orden preferido y anhade remanentes al final
+        picked, used = [], set()
+        for k in order:
+            if k in out and k not in used:
+                picked.append(k); used.add(k)
+        for k in out:
+            if k not in used:
+                picked.append(k); used.add(k)
+
+        canon[field] = picked
+
+    return canon
+
+CANONICAL_OPTIONS = _canonicalize_keys(cat_maps)
+UI_KEYS = {
+    "composition":  CANONICAL_OPTIONS["composition"],
+    "echogenicity": CANONICAL_OPTIONS["echogenicity"],
+    "margins":      CANONICAL_OPTIONS["margins"],
+    "calcifications": CANONICAL_OPTIONS["calcifications"],
+    "sex":          ["F", "M"],
+}
+
+# Mapeo de UI -> claves reales del modelo
+UI_TO_MODEL_FALLBACK = {
+    "echogenicity": {
+        "hyperechoic": "hyperechogenicity",
+        "very_hypoechoic": "marked hypoechogenicity",
+    },
+    "margins": {
+        "well_defined": "well defined",
+        "ill_defined": "ill defined",
+        "smooth": "well defined smooth",
+    },
+    "calcifications": {
+        "none": "non",
+        "micro": "microcalcifications",
+        "macro": "macrocalcifications",
+        "peripheral": "rim",
+    },
+}
+
+UI_TO_MODEL_FALLBACK.setdefault("echogenicity", {}).update({
+    "isoechoic": "isoechogenicity" if "isoechogenicity" in cat_maps["echogenicity"] else "isoechoic",
+    "hypoechoic": "hypoechogenicity" if "hypoechogenicity" in cat_maps["echogenicity"] else "hypoechoic",
+    "very_hypoechoic": "marked hypoechogenicity" 
+        if "marked hypoechogenicity" in cat_maps["echogenicity"] else "very_hypoechoic",
+})
+UI_TO_MODEL_FALLBACK.setdefault("margins", {}).update({
+    "well_defined": "well defined" if "well defined" in cat_maps["margins"] else "well_defined",
+    "smooth": "well defined smooth" if "well defined smooth" in cat_maps["margins"] else "smooth",
+    "ill_defined": "ill defined" if "ill defined" in cat_maps["margins"] else "ill_defined",
+})
+# micro/macro dinamicos
+_micro = ("microcalcifications" if "microcalcifications" in cat_maps["calcifications"]
+          else "microcalcification" if "microcalcification" in cat_maps["calcifications"] else None)
+_macro = ("macrocalcifications" if "macrocalcifications" in cat_maps["calcifications"]
+          else "macrocalcification" if "macrocalcification" in cat_maps["calcifications"] else None)
+UI_TO_MODEL_FALLBACK.setdefault("calcifications", {}).update({
+    "none": "non" if "non" in cat_maps["calcifications"] else "none",
+    **({"micro": _micro} if _micro else {}),
+    **({"macro": _macro} if _macro else {}),
+})
+
+def map_ui_to_model_key(field: str, key: str) -> str:
+    if key in cat_maps.get(field, {}):
+        return key
+
+    alts = {}
+    if field == "margins":
+        alts = {
+            "well_defined": ["well defined"],
+            "ill_defined": ["ill defined"],
+        }
+    if field == "calcifications":
+        alts = {
+            "none": ["non"],
+            "microcalcification": ["microcalcifications"],
+            "macrocalcification": ["macrocalcifications"],
+        }
+    for alt in alts.get(key, []):
+        if alt in cat_maps.get(field, {}):
+            return alt
+
+    if field == "calcifications":
+        if key == "microcalcifications" and "microcalcification" in cat_maps[field]:
+            return "microcalcification"
+        if key == "macrocalcifications" and "macrocalcification" in cat_maps[field]:
+            return "macrocalcification"
+    return key
+
+tabular_input_dim = 6 # Cambiar si la cantidad de meta-datos para train cambia
 
 # Etiquetas de UI (titulos de columnas / campos)
 UI_LABELS = {
@@ -153,31 +306,107 @@ UI_LABELS = {
 
 # Etiquetas legibles para los valores (mapeo a espanhol)
 VALUE_LABELS = {
-    "composition": {"solid": "Sólido", "mixed": "Mixto", "cystic": "Quístico"},
+    "composition": {
+        "solid": "Sólido",
+        "predominantly solid": "Predominantemente sólido",
+        "spongiform": "Espongiforme",
+        "predominantly cystic": "Predominantemente quístico",
+        "dense": "Denso",
+        "cystic": "Quístico",
+        "mixed": "Mixto",
+    },
     "echogenicity": {
-        "hypoechoic": "Hipoecoico",
-        "isoechoic": "Isoecoico",
+        "marked hypoechogenicity": "Muy hipoecoico",
+        "hypoechogenicity": "Hipoecoico",
+        "isoechogenicity": "Isoecoico",
         "hyperechogenicity": "Hiperecoico",
         "hyperechoic": "Hiperecoico",
-        "very_hypoechoic": "Muy hipoecoico",
+        "hypoechoic": "Hipoecoico",
+        "isoechoic": "Isoecoico",
     },
     "margins": {
-        "smooth": "Lisos",
-        "ill_defined": "Mal definidos",
-        "irregular": "Irregulares",
-        "extrathyroidal": "Ext. tiroidea",
         "well defined": "Bien definidos",
+        "ill defined": "Mal definidos",
+        "well defined smooth": "Bien definidos (lisos)",
+        "microlobulated": "Microlobulados",
+        "macrolobulated": "Macrolobulados",
+        "spiculated": "Espiculados",
+        "ill- defined": "Mal definidos",
+        # por compatibilidad
+        "smooth": "Lisos",
         "well_defined": "Bien definidos",
+        "ill_defined": "Mal definidos",
     },
     "calcifications": {
-        "none": "Ninguna",
         "non": "Ninguna",
-        "micro": "Micro",
-        "macro": "Macro",
+        "none": "Ninguna",
+        "microcalcifications": "Microcalcificaciones",
+        "microcalcification": "Microcalcificaciones",
+        "macrocalcifications": "Macrocalcificaciones",
+        "macrocalcification": "Macrocalcificaciones",
         "peripheral": "Periféricas",
+        "rim": "Periféricas",
     },
     "sex": {"F": "Femenino", "M": "Masculino"},
 }
+
+# Etiquetas legibles (base ES) para todas las keys que puede traer cat_maps
+VALUE_LABELS_ES_BASE = {
+    "composition": {
+        "solid": "Sólido",
+        "predominantly solid": "Predominantemente sólido",
+        "spongiform": "Espongiforme",
+        "predominantly cystic": "Predominantemente quístico",
+        "dense": "Denso",
+        "cystic": "Quístico",
+        "mixed": "Mixto",
+        "": "—",
+    },
+    "echogenicity": {
+        "hyperechogenicity": "Hiperecoico",
+        "hypoechogenicity": "Hipoecoico",
+        "marked hypoechogenicity": "Muy hipoecoico",
+        "isoechogenicity": "Isoecoico",
+        "": "—",
+    },
+    "margins": {
+        "spiculated": "Espiculados",
+        "well defined": "Bien definidos",
+        "ill defined": "Mal definidos",
+        "well defined smooth": "Bien definidos (lisos)",
+        "microlobulated": "Microlobulados",
+        "macrolobulated": "Macrolobulados",
+        "ill- defined": "Mal definidos",
+        "": "—",
+    },
+    "calcifications": {
+        "microcalcifications": "Microcalcificaciones",
+        "non": "Ninguna",
+        "macrocalcifications": "Macrocalcificaciones",
+        "microcalcification": "Microcalcificación",
+        "macrocalcification": "Macrocalcificación",
+    },
+    "sex": { "F": "Femenino", "M": "Masculino", "u": "—" },
+}
+
+def build_value_labels(cat_maps: dict) -> dict:
+    """
+    Devuelve un dict {campo: {key_canónica: etiqueta_ES}} solo con las keys
+    que EXISTEN en tu cat_maps, para que el front no reciba claves que tu
+    modelo no conoce.
+    """
+    out = {}
+    for field, key2idx in cat_maps.items():
+        base = VALUE_LABELS_ES_BASE.get(field, {})
+        out[field] = {}
+        for key in key2idx.keys():
+            if key in base:
+                out[field][key] = base[key]
+            else:
+                lbl = key.strip()
+                out[field][key] = "—" if lbl == "" else lbl.title()
+    return out
+
 
 ROI_LABELS = {
     "xml":    "XML",
@@ -187,7 +416,7 @@ ROI_LABELS = {
     "-":      "-",   # clave de seguridad para “sin dato”
 }
 
-# 5) Instancia el wrapper con la dimensión correcta
+# Instancia el wrapper con la dimension correcta
 try:
     wrapper = ThyroidAppWrapper(weights_path=WEIGHTS, tabular_input_dim=tabular_input_dim)
     model_ready = True
@@ -215,7 +444,7 @@ def save_history(history):
 def index():
     history = [h for h in load_history() if not h.get("deleted_at")]
 
-    # --- Normalización de ROI para la UI (corrige historiales viejos/meta/manual) ---
+    # Normalizacion de ROI para la UI
     for h in history:
         src = str(h.get("roi_source") or "").strip().lower()
         # Corrige etiquetas antiguas o faltantes
@@ -231,7 +460,7 @@ def index():
         elif src == "manual":    # compat: sin XML, con box -> unet; sin box -> center
             src = "unet" if (h.get("box") and h["box"] != "-") else "center"
         else:
-            # Deducción por presencia de XML/BOX si roi_source está vacío
+            # Deduccion por presencia de XML/BOX si roi_source esta vacio
             if h.get("xml") and h["xml"] != "-" and h.get("box") and h["box"] != "-":
                 src = "xml"
             elif h.get("box") and h["box"] != "-":
@@ -239,36 +468,16 @@ def index():
             else:
                 src = "center"
         h["roi_source"] = src
-    values_map = {
-        "composition": {
-            0: "Quística",
-            1: "Espongiforme",
-            2: "Mixta",
-            3: "Sólida",
-        },
-        "echogenicity": {
-            0: "Muy hipoecoica",
-            1: "Hipoecoica",
-            2: "Isoecoica",
-            3: "Hiperecoica",
-        },
-        "margins": {
-            0: "Definidos",
-            1: "Indefinidos",
-            2: "Irregulares",
-            3: "Extensión extratiroidea",
-        },
-        "calcifications": {
-            0: "Ninguna",
-            1: "Macrocalcificaciones",
-            2: "Puntiformes",
-            3: "Sombra osificante",
-        },
-        "sex": {
-            0: "Femenino",
-            1: "Masculino",
-        },
-    }
+    values_map = {}
+    for field in ["composition","echogenicity","margins","calcifications","sex"]:
+        mapping = {}
+        for key, idx in cat_maps.get(field, {}).items():
+            if key in SENTINELS or (field=="sex" and key.lower()=="u"):
+                continue
+            es = VALUE_LABELS.get(field, {}).get(key, key.title())
+            mapping[idx] = es
+        values_map[field] = mapping
+    value_labels = build_value_labels(cat_maps)
     return render_template(
         "index.html",
         history=history,
@@ -276,8 +485,8 @@ def index():
         cat_maps=cat_maps,
         ui_labels=UI_LABELS,
         value_labels=VALUE_LABELS,
-        values_map=values_map,
-        roi_labels=ROI_LABELS
+        roi_labels=ROI_LABELS,
+        ui_keys=UI_KEYS,
     )
 
 # Mismos transforms del modelo
@@ -321,12 +530,12 @@ def _prepare_image_with_roi(img_path, xml_path=None):
       full_rgb: PIL RGB de la imagen completa
       crop_rgb: PIL RGB del recorte usado
     """
-    # 1) Abrir imagen completa en L (como en notebook) y RGB para overlay
+    # Abrir imagen completa en L (como en notebook) y RGB para overlay
     full_L   = Image.open(img_path).convert('L')
     full_rgb = Image.open(img_path).convert('RGB')
     W, H     = full_L.size
 
-    # 2) ROI desde XML (si existe y tiene roi/box normalizado o en pixeles)
+    # ROI desde XML (si existe y tiene roi/box normalizado o en pixeles)
     box_meta = None
     if xml_path:
         try:
@@ -350,19 +559,19 @@ def _prepare_image_with_roi(img_path, xml_path=None):
         except Exception:
             box = None
 
-    # 4) Ultimo fallback: center
+    # 4) Ultimo fallback: center-crop
     if box is None:
         roi_src = 'center'
         crop_rgb = full_rgb
     else:
         crop_rgb = full_rgb.crop(box)
 
-    # 5) Resize(256)+CenterCrop(224)+ToTensor+Normalize
+    # Resize(256) + CenterCrop(224) + ToTensor + Normalize
     tfm = T.Compose([
         T.Resize(256),
         T.CenterCrop(224),
         T.ToTensor(),
-        T.Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225]),  # usa tus stats si difieren
+        T.Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225]),
     ])
     x_img = tfm(crop_rgb).unsqueeze(0).to(wrapper.device if wrapper else DEVICE)
 
@@ -442,6 +651,12 @@ def predict():
     else:
         roi_source = "center"
 
+    # Normaliza las claves elegidas en el form a las que existen en cat_maps
+    for f in ["composition","echogenicity","margins","calcifications","sex"]:
+        v = (clinical_payload.get(f) or "").strip()
+        if v:
+            clinical_payload[f] = map_ui_to_model_key(f, v)
+
     # Vector clinico + cobertura + k
     vec, coverage, k_present = encode_clinical_with_mask(clinical_payload, cat_maps)
     clin_tensor = torch.tensor(vec, dtype=torch.float32) if any(vec) else None
@@ -473,6 +688,13 @@ def predict():
     patient_id = (request.form.get("patient_id","") or "").strip()
     if not patient_id:
         flash("El ID de paciente es obligatorio.", "warning")
+        return redirect(url_for('index'))
+
+    history_now = load_history()
+    pid_norm = patient_id.lower()
+    if any((h.get("patient_id","").strip().lower() == pid_norm) and not h.get("deleted_at")
+           for h in history_now):
+        flash("Ya existe un examen con ese ID de paciente. Usa otro ID.", "warning")
         return redirect(url_for('index'))
 
     result = {
@@ -532,7 +754,7 @@ def explain():
     if f is None and not filename:
         return {"error": "Falta 'file' o 'filename'."}, 400
 
-    # Intenta recuperar el XML asociado si viene por filename (para usar MISMA ROI)
+    # Intenta recuperar el XML asociado si viene por filename
     img_path = None
     xml_path_for_explain = None
     if not f and filename:

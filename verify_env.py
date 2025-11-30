@@ -1,5 +1,4 @@
-# Verificador rápido de dependencias
-# Uso: python verify_env.py
+# Verificador rapido de dependencias
 import importlib, sys
 
 mods = [

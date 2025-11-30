@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision import models
 
 class ModelNotReadyError(Exception):
@@ -43,16 +44,65 @@ class MultimodalThyroidClassifier(nn.Module):
         )
 
     def forward(self, imgs: torch.Tensor, clinical: torch.Tensor | None):
+        """
+        imgs:      [B, 3, 224, 224]
+        clinical:  [B, tab_dim] o [tab_dim] o None
+        - Si clinical es None → se usa vector-cero.
+        - Si viene 1D → se convierte a batch de 1.
+        - Si batch o nº de columnas no coincide → se ajusta (expand, recorte, padding).
+        """
+
         # Features de imagen
-        img_feat = self.cnn(imgs)
+        img_feat = self.cnn(imgs)           # [B, 512]
+        B = img_feat.size(0)
+        dev = img_feat.device
+        dt = img_feat.dtype
 
-        # Permite prediccion sin metadatos (vector-cero)
+        # Normalizacion de clinical
         if clinical is None:
-            clinical = imgs.new_zeros((imgs.size(0), self.tabular_dim))
+            # Vector-cero [B, tabular_dim]
+            clinical = imgs.new_zeros((B, self.tabular_dim), dtype=dt, device=dev)
+        else:
+            # Asegurar que sea tensor
+            if not torch.is_tensor(clinical):
+                clinical = torch.as_tensor(clinical, dtype=dt, device=dev)
+            else:
+                # Alinear dtype/device
+                if clinical.device != dev or clinical.dtype != dt:
+                    clinical = clinical.to(dev, dtype=dt)
 
-        clin_feat = self.tabular_net(clinical)
-        fused = torch.cat([img_feat, clin_feat], dim=1)
-        return self.classifier(fused)
+            # Asegurar 2D [batch, features]
+            if clinical.dim() == 1:
+                clinical = clinical.unsqueeze(0)    # [1, F]
+
+            # Ajustar batch:
+            # Si solo hay 1 fila y B > 1 -> repetir
+            if clinical.size(0) == 1 and B > 1:
+                clinical = clinical.expand(B, -1)
+            # Si el batch es distinto -> recortar a B
+            elif clinical.size(0) != B:
+                clinical = clinical[:B, ...]
+
+            # Ajustar # de columnas a self.tabular_dim
+            feat_dim = clinical.size(1)
+            if feat_dim < self.tabular_dim:
+                # Padding con ceros al final
+                pad = self.tabular_dim - feat_dim
+                padding = clinical.new_zeros((clinical.size(0), pad))
+                clinical = torch.cat([clinical, padding], dim=1)
+            elif feat_dim > self.tabular_dim:
+                # Truncar columnas extra
+                clinical = clinical[:, :self.tabular_dim]
+
+        # Rama tabular
+        clin_feat = self.tabular_net(clinical)    # [B, 32]
+
+        # Fusion
+        fused = torch.cat([img_feat, clin_feat], dim=1)  # [B, 512+32]
+
+        # Clasificador final
+        return self.classifier(fused)             # [B, num_classes]
+
 
 class ThyroidAppWrapper:
     def __init__(self, weights_path: str, tabular_input_dim: int, device: str | None = None):
@@ -77,10 +127,10 @@ class ThyroidAppWrapper:
         self.model.eval()
 
         # umbrales disponibles en el wrapper
-        self.tau_mm  = float(ck.get("tau_opt", 0.5))          # con metadatos
+        self.tau_mm  = float(ck.get("tau_opt", 0.5)) # con metadatos
         self.tau_img = float(ck.get("tau_opt_img", self.tau_mm))  # solo imagen (fallback)
         self.tau_by_k = {int(k): float(v) for k, v in ck.get("tau_by_k", {}).items()}
-        self.ck_cat_maps = ck.get("cat_maps")  # <-- puede venir en el .pth
+        self.ck_cat_maps = ck.get("cat_maps")
 
     @contextmanager
     def inference_mode(self):
@@ -108,8 +158,8 @@ class ThyroidAppWrapper:
                 clin_tensor = clin_tensor.unsqueeze(0)
             clin = clin_tensor.to(self.device)
 
-        logits = self.model(img, clin)                # el modelo maneja clin=None
+        logits = self.model(img, clin) # el modelo maneja clin=None
         prob = torch.sigmoid(logits).reshape(-1)[0].item()
-        # pred "de cortesia" usando tau_mm; en la app se recalcula con tau_mm/tau_img
+        # pred usando tau_mm; en la app se recalcula con tau_mm/tau_img
         pred = 1 if prob >= self.tau_mm else 0
         return pred, prob

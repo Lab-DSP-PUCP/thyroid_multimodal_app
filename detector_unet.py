@@ -7,7 +7,7 @@ import torchvision.transforms as T #type: ignore
 import cv2 #type: ignore
 from matplotlib import cm as mpl_cm #type: ignore
 
-# U-Net mini (ligera)
+# U-Net mini
 def conv_block(c_in, c_out):
     return nn.Sequential(
         nn.Conv2d(c_in, c_out, 3, padding=1, bias=False),

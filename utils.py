@@ -1,5 +1,7 @@
+import ast
 import os
 import json
+import datetime
 from PIL import Image # type: ignore
 import torch # type: ignore
 from torchvision import transforms as T # type: ignore
@@ -23,30 +25,46 @@ _VALUE_ALIASES = {
         "sólido":"solid","solido":"solid","solid":"solid",
         "mixto":"mixed","mixed":"mixed",
         "quístico":"cystic","quistico":"cystic","cystic":"cystic",
+        "esponjiforme":"spongiform","espongiforme":"spongiform",
+        "spongiforme":"spongiform","spongiform":"spongiform",
+        "dense":"dense","denso":"dense",
+        "predominantly solid":"predominantly solid",
+        "predominantly_solid":"predominantly solid",
+        "predominantly cystic":"predominantly cystic",
+        "predominantly_cystic":"predominantly cystic",
     },
     "echogenicity": {
-        "hipoecoico":"hypoechoic","hypoechoic":"hypoechoic",
-        "isoeocoico":"isoechoic","isoechoic":"isoechoic",
-        "hiperecoico":"hyperechoic","hyperechoic":"hyperechoic","hyperechogenicity":"hyperechoic",
-        "muy hipoecoico":"very_hypoechoic","very hypoechoic":"very_hypoechoic",
+        "hypoechoic":"hypoechogenicity",
+        "isoechoic":"isoechogenicity",
+        "hyperechoic":"hyperechogenicity",
+        "hipoecoico":"hypoechogenicity",
+        "isoeocoico":"isoechogenicity",
+        "hiperecoico":"hyperechogenicity",
+        "very hypoechoic":"marked hypoechogenicity",
+        "muy hipoecoico":"marked hypoechogenicity",
+        "marked hypoechogenicity":"marked hypoechogenicity",
+        "hypoechogenicity":"hypoechogenicity",
+        "isoechogenicity":"isoechogenicity",
+        "hyperechogenicity":"hyperechogenicity",
     },
     "margins": {
-        "bien definidos":"well_defined","well defined":"well_defined","well defined smooth":"well_defined",
-        "mal definidos":"ill_defined","ill defined":"ill_defined","ill- defined":"ill_defined",
-        "irregulares":"irregular","spiculated":"irregular","spiculado":"irregular",
-        "extratiroidea":"extrathyroidal","extrathyroidal":"extrathyroidal",
+        "well_defined":"well defined",
+        "ill_defined":"ill defined",
+        "well defined smooth":"well defined smooth",
+        "ill- defined":"ill- defined",
+        "lisos":"smooth","smooth":"smooth",
         "microlobulated":"microlobulated","macrolobulated":"macrolobulated",
+        "irregular":"irregular","spiculated":"spiculated"
     },
     "calcifications": {
-        "ninguna":"none","non":"none","none":"none",
-        "micro":"micro","microcalcifications":"micro",
-        "macro":"macro","macrocalcifications":"macro",
-        "periféricas":"peripheral","peripheral":"peripheral",
+        "none":"non","ninguna":"non",
+        "microcalcifications":"microcalcifications",
+        "macrocalcifications":"macrocalcifications",
+        "microcalcification":"microcalcification",
+        "macrocalcification":"macrocalcification",
+        "peripheral":"rim","peripheral_calcifications":"rim"
     },
-    "sex": {
-        "femenino":"F","female":"F","f":"F",
-        "masculino":"M","male":"M","m":"M",
-    },
+    "sex": { "femenino":"F","female":"F","f":"F", "masculino":"M","male":"M","m":"M","u":"u" }
 }
 
 def canonicalize_meta(meta: dict, _cat_maps_unused: dict) -> dict:
@@ -87,12 +105,12 @@ def canonicalize_meta(meta: dict, _cat_maps_unused: dict) -> dict:
 
     out = {}
 
-    # Clínicos como STRINGS
+    # Clinicos como string
     for rawk, rawv in low.items():
         can = _k(rawk)
         if can in ("composition","echogenicity","margins","calcifications"):
             v = rawv.lower()
-            # aplica alias → string canónico
+            # aplica alias -> string canónico
             v = _VALUE_ALIASES.get(can, {}).get(v, v)
             if v:
                 out[can] = v
@@ -107,7 +125,7 @@ def canonicalize_meta(meta: dict, _cat_maps_unused: dict) -> dict:
                 try: out["age"] = str(int(float(s.replace(",", "."))))
                 except: out["age"] = s
 
-    # ROI (acepta roi/box/bbox ó xmin,ymin,xmax,ymax ó x,y,w,h)
+    # ROI (acepta roi/box/bbox o xmin,ymin,xmax,ymax o x,y,w,h)
     def _num(x):
         try: return float(str(x).strip().replace(",", "."))
         except: return None
@@ -194,7 +212,7 @@ def compute_tab_dim(cat_maps: dict) -> int:
 def encode_clinical(payload: dict, cat_maps: dict) -> list[float]:
     """
     Convierte form/XML a vector tabular [one-hots..., age].
-    - Si un campo falta/no coincide → one-hot en ceros.
+    - Si un campo falta/no coincide -> one-hot en ceros.
     - Toleramos numericos como '2' si la key es '2'.
     - Edad: 0.0 si falta o es invalida (neutral, sin medias).
     """
@@ -264,7 +282,7 @@ def _parse_xml_meta(xml_path: str) -> dict:
         return meta
     try:
         root = ET.parse(xml_path).getroot()
-        # Recorre TODOS los descendientes, no solo hijos directos
+        # Recorre TODOS los "descendientes", no solo "hijos" directos
         for elem in root.iter():
             if elem is root:
                 continue
@@ -278,9 +296,9 @@ def _parse_xml_meta(xml_path: str) -> dict:
     
 def recompute_and_update_record(rec: dict, clinical_payload: dict):
     """
-    Recalcula usando la MISMA lógica de ROI que /predict:
+    Recalcula usando la MISMA logica de ROI que /predict:
     - XML -> U-Net -> center
-    y actualiza roi_source = 'xml' | 'unet' | 'center' según lo usado.
+    y actualiza roi_source = 'xml' | 'unet' | 'center' segun lo usado.
     """
     wrapper = ctx.wrapper
     if wrapper is None:
@@ -294,7 +312,13 @@ def recompute_and_update_record(rec: dict, clinical_payload: dict):
     if not os.path.exists(image_path):
         abort(404, f"No se encontró el archivo de imagen: {rec['file']}")
 
-    # === ROI consistente (XML -> U-Net -> center) ===
+    # Antes que nada, persistir clinicos que llegaron
+    for k in ("composition","echogenicity","margins","calcifications","sex","age"):
+        v = clinical_payload.get(k)
+        if v not in (None, "", "-"):
+            rec[k] = v
+
+    # ROI consistente (XML -> U-Net -> center)
     xml_path = None
     if rec.get("xml") and rec["xml"] != "-":
         cand = os.path.join(up_dir, rec["xml"])
@@ -308,13 +332,13 @@ def recompute_and_update_record(rec: dict, clinical_payload: dict):
     except Exception as e:
         abort(500, f"Error al preparar imagen/ROI: {e}")
 
-    # === Vector clínico (tolerante a tipos) ===
-    vec, coverage, k_present = encode_clinical_with_mask(clinical_payload, wrapper.ck_cat_maps)
+    # Vector clinico tolerante a tipos
+    vec, coverage, k_present = encode_clinical_with_mask(clinical_payload, ctx.cat_maps)
     clin_t = torch.tensor(vec, dtype=torch.float32) if any(vec) else None
     if clin_t is not None:
         clin_t = clin_t.unsqueeze(0).to(wrapper.device)
 
-    # === Predicción ===
+    # Prediccion
     with wrapper.inference_mode():
         _, prob = wrapper.predict(x_img, clin_t)
 
@@ -326,7 +350,6 @@ def recompute_and_update_record(rec: dict, clinical_payload: dict):
     pred  = 1 if float(prob) >= float(tau) else 0
     label = "Maligno" if pred == 1 else "Benigno"
 
-    # === Persistir resultado coherente para la UI ===
     rec.update({
         "label": label,
         "pred": int(pred),

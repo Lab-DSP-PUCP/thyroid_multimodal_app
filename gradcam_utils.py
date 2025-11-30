@@ -38,7 +38,7 @@ class GradCAM:
             self.model.zero_grad(set_to_none=True)
             logits = self.model(input_tensor)
 
-            if logits.dim() == 2 and logits.shape[1] == 1:  # binary
+            if logits.dim() == 2 and logits.shape[1] == 1:
                 score = logits[:, 0]; used_idx = 0
             else:
                 used_idx = int(logits.argmax(dim=1).item()) if class_idx is None else int(class_idx)
@@ -63,7 +63,7 @@ def overlay_cam_on_pil(pil_img, cam, alpha=0.35, cmap_name='jet'):
     cam_img = Image.fromarray((cam*255).astype(np.uint8)).resize((w, h), resample=Image.BILINEAR)
     cam_np = np.array(cam_img) / 255.0
     cmap = cm.get_cmap(cmap_name)
-    heat = cmap(cam_np)[..., :3]   # RGB in [0,1]
+    heat = cmap(cam_np)[..., :3]   # RGB en [0,1]
     base = np.array(pil_img).astype(np.float32) / 255.0
     over = (1 - alpha) * base + alpha * heat
     over = np.clip(over, 0, 1)

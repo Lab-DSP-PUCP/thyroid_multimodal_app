@@ -4,21 +4,129 @@ function readJsonScript(id){
   if(!el) return {};
   try{ return JSON.parse(el.textContent||'{}'); }catch{ return {}; }
 }
+
 const UI  = readJsonScript('ui-json');
 const VAL = readJsonScript('val-json');
 
 // Helpers de formato
-const fmt = (k,v)=> (k in VAL && v in VAL[k]) ? VAL[k][v] : (v ?? "-");
+const norm = (s)=> String(s??'').trim()
+  .toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/\s+/g,'_');
+
+function toTitle(s){ return String(s||'').replace(/^\p{L}/u, c=>c.toUpperCase()); }
+
+// Alias (clave XML -> clave estandar del diccionario)
+const ALIAS = {
+  echogenicity: {
+    isoechogenicity: 'isoechoic',
+    isoechogenic:    'isoechoic',
+    hypoechogenicity:'hypoechoic',
+    hyperechogenicity:'hyperechoic',
+  },
+  calcifications: {
+    microcalcifications: 'microcalcification',
+    macrocalcifications: 'macrocalcification',
+    peripheral: 'rim',
+    peripheral_calcifications: 'rim',
+  },
+  margins: {
+    well_defined: 'smooth',
+    ill_defined:  'ill_defined',
+  }
+};
+
+// Traduccion de respaldo directa
+const DIRECT = {
+  composition: {
+    spongiform: 'Espongiforme',
+    solid:      'Sólido',
+    mixed:      'Mixto',
+    cystic:     'Quístico',
+  },
+  echogenicity: {
+    isoechogenicity:   'Isoecoico',
+    isoechogenic:      'Isoecoico',
+    isoechoic:         'Isoecoico',
+    hypoechogenicity:  'Hipoecoico',
+    hypoechoic:        'Hipoecoico',
+    hyperechogenicity: 'Hiperecoico',
+    hyperechoic:       'Hiperecoico',
+    anechoic:          'Anecoico',
+  },
+  margins: {
+    well_defined: 'Bien definidos',
+    smooth:       'Lisos',
+    ill_defined:  'Mal definidos',
+    lobulated:    'Lobulados',
+    irregular:    'Irregulares',
+  },
+  calcifications: {
+    microcalcifications: 'Microcalcificaciones',
+    microcalcification:  'Microcalcificaciones',
+    macrocalcifications: 'Macrocalcificaciones',
+    macrocalcification:  'Macrocalcificaciones',
+    peripheral:          'Periféricas',
+    rim:                 'Periféricas',
+    none:                'Ninguna',
+  },
+  sex: {
+    f: 'Femenino',
+    m: 'Masculino',
+  }
+};
+
+// Busca en VAL, si no hay, usa alias. Si no, DIRECT, si no, deja tal cual.
+function fmt(k, v){
+  const raw = String(v ?? '').trim();
+  const vLower = raw.toLowerCase();
+  const dict = (VAL && VAL[k]) ? VAL[k] : null;
+
+  // match directo en VAL
+  if (dict && raw in dict) return dict[raw];
+
+  // alias -> VAL
+  const aliasMap = ALIAS[k] || {};
+  if (aliasMap[vLower] && dict && aliasMap[vLower] in dict) {
+    return dict[ aliasMap[vLower] ];
+  }
+
+  // normalizados -> VAL
+  if (dict){
+    const candidates = [ norm(raw), vLower.replace(/\s+/g,'_') ];
+    for(const c of candidates){ if (c in dict) return dict[c]; }
+  }
+
+  // respaldo directo (ES) por categoria
+  if (DIRECT[k] && (vLower in DIRECT[k])) return DIRECT[k][vLower];
+
+  // ultimo recurso
+  return toTitle(raw || '-').replace(/_/g,' ');
+}
+
 const titleize = s => (s||'').replaceAll('_',' ').replace(/^\w/,c=>c.toUpperCase());
 
-// Estado global/explain 
+function toTitle(s){ return String(s||'').replace(/^\p{L}/u, c=>c.toUpperCase()); }
+
+// Estado global
 let currentExplainFile = null;
 let currentClinPayload = null;
 let currentImageURL = null;
+let defaultHintHTML = "";
+let lastPreview = { type: null, url: null };
 
 // refs
 const pane = () => document.getElementById('preview-pane');
 const slot = () => document.getElementById('preview-content');
+
+// Oculta TODO del panel (imagen CAM, grid XML y original)
+function collapsePreview() {
+  wipePreviewImages(); // limpia el slot superior (CAM / XML)
+  const orig = document.getElementById('original-view');
+  if (orig) orig.classList.add('d-none'); // oculta la imagen original
+  toggleCamControls(false);  // oculta botones CAM
+  lastPreview = { type: null, url: null }; // resetea estado
+}
 
 // Funcion para limpiar/resetear la vista de Grad-CAM
 function resetGradcamView() {
@@ -27,7 +135,6 @@ function resetGradcamView() {
     gradcamView.src = '';
     gradcamView.classList.add('d-none');
   }
-  // Tambien es buena idea deshabilitar el botón "Explicar" hasta tener un nuevo contexto
   const btnExplain = document.getElementById('btn-explain');
   if(btnExplain) btnExplain.disabled = true;
 }
@@ -59,7 +166,7 @@ function wipePreviewImages(){
 }
 
 function ensureCamOutput() {
-  // Devuelve (elemento <img> unico donde se pintara el resultado)
+  // Devuelve elemento <img> unico donde se pintara el resultado
   const s = slot();
   let out = s.querySelector('#cam-output');
   if (!out) {
@@ -84,7 +191,7 @@ function headerBadge(container, item){
   container.appendChild(wrap);
 }
 
-// Render de solo la imagen (cuando das clic en "ver")
+// Render de solo la imagen (cuando se da clic en "ver")
 function renderImageOnly(url){
   wipePreviewImages();
   const out = ensureCamOutput();
@@ -154,7 +261,13 @@ async function renderXmlOnly(url, item){
     pairs.forEach(([label,value])=>{
       const l=document.createElement('div'); l.className='label'; l.textContent=label;
       const v=document.createElement('div'); v.className='value';
-      if (value instanceof Node) v.appendChild(value); else v.textContent=String(value ?? "-");
+      if (value instanceof Node) {
+        v.appendChild(value);
+      } else {
+        const txt = String(value ?? "-");
+        v.textContent = toTitle(txt);
+        if (txt === "-") v.classList.add('text-muted','fst-italic');
+      }
       grid.appendChild(l); grid.appendChild(v);
     });
     s.appendChild(grid); extras.forEach(el=>s.appendChild(el));
@@ -166,29 +279,44 @@ async function renderXmlOnly(url, item){
   }
 }
 
-// Selección desde la tabla (ver y xml)
+function toggleCamControls(show){
+  const btnExplain = document.getElementById('btn-explain');
+  const btnFull    = document.getElementById('btn-fullscreen');
+  // contenedor del grupo de radios "Modelo / Completa"
+  const camGroup   = document.querySelector('[aria-label="Vista Grad-CAM"]');
+
+  [btnExplain, btnFull, camGroup].forEach(el=>{
+    if(!el) return;
+    el.classList.toggle('d-none', !show);
+  });
+  if(btnExplain) btnExplain.disabled = !show;
+}
+
+// Seleccion desde la tabla (ver y xml)
 document.addEventListener('click', async (e)=>{
   const a = e.target.closest('a.preview-link');
   if(!a) return;
   e.preventDefault();
 
+  const type = a.getAttribute('data-type');
+  const url  = a.getAttribute('data-file');
+
+  // TOGGLE: si es el mismo (tipo+url), colapsa
+  if (lastPreview.type === type && lastPreview.url === url) {
+    collapsePreview();
+    return;
+  }
+  lastPreview = { type, url };
+
+  // Limpia el slot superior SIEMPRE
   wipePreviewImages();
 
-  // Oculta la vista de la imagen original anterior.
+  // Oculta la imagen original previa
   const orig = document.getElementById('original-view');
   if (orig) orig.classList.add('d-none');
 
-  // Habilita el boton "Explicar" solo si se hace clic en una imagen.
-  const btnExplain = document.getElementById('btn-explain');
-  if (btnExplain) {
-     const type = a.getAttribute('data-type');
-     btnExplain.disabled = (type !== 'image');
-  }
-
-  const type = a.getAttribute('data-type'); // 'image' | 'xml'
-  const url  = a.getAttribute('data-file');
+  // Manten contexto para Grad-CAM
   const item = JSON.parse(a.getAttribute('data-json')||'{}');
-
   currentExplainFile = item?.file || null;
   currentImageURL = (type==='image') ? url : currentImageURL;
   currentClinPayload = {
@@ -201,15 +329,18 @@ document.addEventListener('click', async (e)=>{
   };
 
   if (type === 'image') {
-    currentImageURL = url; // guarda la URL para Grad-CAM
-    const orig = document.getElementById('original-view');
+    // Mostrar SOLO la imagen original abajo (sin crear otra en el slot)
+    toggleCamControls(true);
     if (orig) {
       orig.src = url;
       orig.alt = 'Ecografía original (sin Grad-CAM)';
       orig.classList.remove('d-none');
     }
+  } else {
+    // XML: oculta controles CAM y renderiza la tabla bonita arriba
+    toggleCamControls(false);
+    await renderXmlOnly(url, item);
   }
-  if (type === 'xml')     await renderXmlOnly(url, item);
 });
 
 // Grad-CAM
@@ -281,6 +412,20 @@ function initGradcamControls(){
   });
 }
 
+function clearPreviewPane() {
+  wipePreviewImages();
+  // oculta imagen original y controles CAM
+  document.getElementById('original-view')?.classList.add('d-none');
+  toggleCamControls(false);
+  // restaura el hint inicial
+  const s = slot();
+  if (s) s.innerHTML = defaultHintHTML || '<div class="text-muted">Previsualización cerrada.</div>';
+  // limpia estado actual
+  const p = pane();
+  if (p) { delete p.dataset.viewType; delete p.dataset.viewUrl; }
+  currentExplainFile = null;
+}
+
 // Tema y toggle de metadatos (solo UI, no CAM)
 function initThemeToggle(){
   const btn  = document.getElementById('theme-toggle');
@@ -322,9 +467,15 @@ function initMetadataToggle() {
 
 // Boot
 document.addEventListener('DOMContentLoaded', () => {
+  if (!defaultHintHTML) defaultHintHTML = slot()?.innerHTML || "";
   initGradcamControls();
   initThemeToggle();
   initMetadataToggle();
+  // Asegurar "Completa" como vista CAM por defecto
+  const full = document.getElementById('camViewFull');
+  const crop = document.getElementById('camViewCrop');
+  if (full) full.checked = true;
+  if (crop) crop.checked = false;
 });
 
 // Abrir visor a pantalla completa con la imagen visible (CAM u original)
@@ -339,7 +490,7 @@ document.addEventListener('click', (e) => {
   let targetImg = pane.querySelector('img:not(.d-none)');
   // 2) si no, intenta la primera imagen dentro del preview-content
   if (!targetImg) targetImg = pane.querySelector('#preview-content img');
-  // 3) último recurso: imagen original (por id)
+  // 3) ultimo recurso: imagen original (por id)
   if (!targetImg) targetImg = document.getElementById('original-view');
 
   const src = targetImg?.getAttribute('src');
@@ -348,14 +499,14 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// ======= Tutorial video: autoplay + overlay =======
+// Tutorial video: autoplay + overlay
 (() => {
   const video   = document.getElementById('tutorial-video');
   const overlay = document.querySelector('.video-overlay-play');
   const modal   = document.getElementById('tutorialModal');
   if (!video || !overlay || !modal) return;
 
-  // Muestra/oculta overlay según estado del video
+  // Muestra/oculta overlay segun estado del video
   const syncOverlay = () => {
     if (video.paused || video.ended) {
       overlay.classList.remove('hidden');
@@ -364,13 +515,13 @@ document.addEventListener('click', (e) => {
     }
   };
 
-  // Al abrir el modal: intenta reproducir (requiere muted, ya está en el HTML)
+  // Al abrir el modal: intenta reproducir (requiere muted, ya esta en el HTML)
   modal.addEventListener('shown.bs.modal', async () => {
     try {
       video.currentTime = 0;
       await video.play();
     } catch (e) {
-      // si el navegador bloquea, el usuario verá el overlay y podrá clickear
+      // si el navegador bloquea, el usuario vera el overlay y podra clickear
     } finally {
       syncOverlay();
     }

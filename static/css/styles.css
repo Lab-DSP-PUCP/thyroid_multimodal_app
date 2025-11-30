@@ -1,4 +1,3 @@
-/* Variables por tema */
 :root {
   /* Page */
   --page-bg: #f5f6f8;
@@ -15,7 +14,7 @@
   --nav-grad-start: #0d6efd;
   --nav-grad-end:   #0b5ed7;
 
-  /* Preview <pre> */
+  /* Preview */
   --pre-bg: rgba(0,0,0,.03);
   --pre-border: #e5e7eb;
 
@@ -58,15 +57,12 @@
   --focus-ring: rgba(255,255,255,.35);
 }
 
-/* -----------------------
-   Fondo / tipografia global
-   ----------------------- */
+/* Fondo / tipografia global */
 body {
   background-color: var(--page-bg) !important;
   color: var(--page-fg);
 }
 
-/* Si el body quedo con bg-light por herencia, neutralizar en dark */
 :root[data-bs-theme="dark"] .bg-light {
   background-color: var(--page-bg) !important;
 }
@@ -155,6 +151,7 @@ body {
   background:rgba(255,255,255,.08);
   border-color:rgba(255,255,255,.5);
 }
+
 /* Boton de tema en modo claro: alto contraste sobre navbar azul */
 :root[data-bs-theme="light"] .btn-theme{
   color: #fff;
@@ -167,7 +164,7 @@ body {
 }
 
 
-/* Sin contorno punteado; halo accesible */
+/* Sin contorno punteado: halo accesible */
 #theme-toggle{ outline:none !important; box-shadow:none !important; }
 #theme-toggle::-moz-focus-inner{ border:0; }
 
@@ -177,7 +174,6 @@ body {
   border-color: currentColor;
 }
 
-/* Evita estilos heredados que metan fondo blanco accidentalmente */
 :root[data-bs-theme="dark"] #theme-toggle.btn-outline-light,
 :root[data-bs-theme="dark"] #theme-toggle.btn-outline-light:hover,
 :root[data-bs-theme="dark"] #theme-toggle.btn-outline-light:focus {
@@ -197,10 +193,7 @@ body {
 :root[data-bs-theme="dark"] .btn-theme .icon-sun{ display:none; }
 :root[data-bs-theme="dark"] .btn-theme .icon-moon{ display:block; }
 
-
-
 /* Transicion de tema */
-/* Activamos transicion solo durante el toggle: añadir .theme-animating al <html> */
 :root.theme-animating body,
 :root.theme-animating .card,
 :root.theme-animating .navbar,
@@ -250,7 +243,8 @@ body {
   outline: none !important;
   box-shadow: none !important;
 }
-/* Con halo solo cuando navegas con teclado (Tab) */
+
+/* Con halo solo con teclado (Tab) */
 #use-metadata-switch:focus-visible{
   box-shadow: 0 0 0 .25rem var(--focus-ring) !important;
   border-color: currentColor;
@@ -293,7 +287,6 @@ video::-webkit-media-controls-enclosure{ overflow:hidden; }
   background: transparent;
 }
 .preview-spinner.d-none { display: none !important; }
-/*------------------------------------------------------------------------------*/
 .table th, .table td {
   vertical-align: middle; /* Alineacion vertical para texto */
   text-align: center;     /* Alineacion horizontal para las celdas */
@@ -319,19 +312,17 @@ video::-webkit-media-controls-enclosure{ overflow:hidden; }
 .results-wrap {
   display: flex;
   flex-direction: column;
-  min-height: 420px;           /* para que no colapse si hay pocos registros */
+  min-height: 420px; /* para que no colapse si hay pocos registros */
 }
 
 /* La tabla tiene su propio alto y scroll independiente */
 .table-wrap {
-  /* define la altura deseada para que la tabla haga scroll dentro del card */
-  max-height: 48vh;            /* ~media pantalla; ajusta a gusto */
-  overflow: auto;              /* vertical y horizontal según se necesite */
+  max-height: 48vh;            /* media pantalla*/
+  overflow: auto;              /* vertical y horizontal segun se necesite */
   border-bottom: 1px solid rgba(255,255,255,.08);
   padding-bottom: .25rem;
 }
 
-/* El panel de preview ya no hereda el scroll de la tabla */
 .preview-pane {
   position: relative;          /* normal flow */
   background: rgba(255,255,255,.02);
@@ -360,7 +351,7 @@ video::-webkit-media-controls-enclosure{ overflow:hidden; }
   position: absolute;
   inset: 0;
   overflow: hidden;
-  touch-action: none;       /* evita scroll de la página mientras haces pan/zoom */
+  touch-action: none;
   cursor: grab;
   -webkit-user-select: none;
   user-select: none;
@@ -391,4 +382,122 @@ video::-webkit-media-controls-enclosure{ overflow:hidden; }
   will-change: transform;
   transform-origin: 0 0;  /* importante para translate + scale */
   max-width: none;        /* control total con transform */
+}
+
+/* Botones del modal -> "¿Como usar?" */
+.help-actions .btn {
+  min-width: 220px;          /* que no queden angostos */
+  font-weight: 600;
+}
+@media (max-width: 576px) {
+  .help-actions .btn { width: 100%; }
+}
+
+/* Placeholders mas opacos */
+.form-control::placeholder { 
+  color: var(--muted);
+  opacity: .48;
+}
+:root[data-bs-theme="dark"] .form-control::placeholder {
+  opacity: .32;
+}
+
+/* Estilo para la vista de XML */
+.preview-grid{
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) 1fr; /* título | valor */
+  column-gap: 1rem;
+  row-gap: .25rem;
+  margin-top: .25rem;
+}
+
+/* Titulos (labels) mas distinguibles */
+.preview-grid .label{
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: .2px;
+  padding: .35rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.preview-grid .label::after{
+  content: ":";
+  margin-left: .25rem;
+  color: var(--muted);
+}
+
+/* Valores (atributos) con contraste y subrayado sutil al pasar */
+.preview-grid .value{
+  color: var(--page-fg);
+  padding: .35rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+
+/* Ultima fila sin linea inferior */
+.preview-grid > .label:last-of-type,
+.preview-grid > .value:last-of-type{
+  border-bottom: none;
+}
+
+/* Bloques <details> de puntos */
+.preview-details{
+  margin-top: .5rem;
+}
+.preview-details > summary{
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+  list-style: none;
+}
+.preview-details > summary::before{ /* caret personalizado */
+  content: "▸";
+  display: inline-block;
+  margin-right: .4rem;
+  transition: transform .15s ease;
+}
+.preview-details[open] > summary::before{ transform: rotate(90deg); }
+
+/* Vista XML: filas con separadores continuos */
+.preview-grid{
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr;
+  column-gap: 0; /* sin gap para que no se corte la linea */
+  border: 1px solid var(--card-border);
+  border-radius: .5rem;
+  overflow: hidden; /* respeta los radios */
+  margin-top: .5rem;
+}
+
+/* Celdas */
+.preview-grid .label,
+.preview-grid .value{
+  padding: .625rem .75rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+/* Separador vertical entre columnas */
+.preview-grid .value{
+  border-left: 1px solid var(--card-border);
+  color: var(--page-fg);
+}
+
+/* Columna izquierda (titulos) con leve contraste */
+:root[data-bs-theme="light"] .preview-grid .label{ background: rgba(0,0,0,.02); }
+:root[data-bs-theme="dark"]  .preview-grid .label{ background: rgba(255,255,255,.02); }
+
+/* Titulos mas claros y con ":" */
+.preview-grid .label{
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+.preview-grid .label::after{ content: ":"; margin-left: .25rem; color: var(--muted); }
+
+.preview-grid > :nth-last-child(-n+2){
+  border-bottom: none !important;
+}
+
+/* efecto zebra sutil para legibilidad */
+.preview-grid > :nth-child(4n+1),
+.preview-grid > :nth-child(4n+2){
+  background-image: linear-gradient(to right, transparent, transparent);
 }

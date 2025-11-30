@@ -2,7 +2,7 @@
 REM Ejecuta la app usando el entorno embebido en .\venv (sin instalar globalmente)
 setlocal enabledelayedexpansion
 
-REM Ubicación del script (carpeta del proyecto)
+REM Ubicacion del script (carpeta del proyecto)
 set "HERE=%~dp0"
 cd /d "%HERE%"
 
@@ -14,7 +14,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-REM Si no existe venv, lo creamos e instalamos dependencias SOLO dentro de la carpeta
+REM Si no existe venv, se crea e instala dependencias solo dentro de la carpeta
 if not exist venv (
   echo [INFO] Creando entorno virtual local...
   python -m venv venv || goto :fail
