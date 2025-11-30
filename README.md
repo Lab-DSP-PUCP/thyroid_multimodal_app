@@ -16,3 +16,14 @@ python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
 python app.py
+```
+
+## Si se quiere generar el ejecutable
+pyinstaller --noconfirm --clean --onefile --name ThyroidAid --add-data "templates;templates" --add-data "static;static" --add-data "models;models" app.py 
+A veces, si no genera, es mejor primero limpiar:
+```bat
+taskkill /IM ThyroidAid.exe /F 2>$null
+>> taskkill /IM python.exe /F 2>$null
+>> Remove-Item -Recurse -Force .\build -ErrorAction SilentlyContinue
+>> Remove-Item -Recurse -Force .\dist  -ErrorAction SilentlyContinue
+```
