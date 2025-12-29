@@ -1,6 +1,5 @@
 ## 🎥 Tutorial
-[![Ver tutorial](<img width="1721" height="870" alt="tutorial_portada" src="https://github.com/user-attachments/assets/f5e0e963-5518-4f73-ab35-d7c3409e5970" />
-)](https://youtu.be/E8f4Zwy0NDI)
+[![Ver tutorial](https://github.com/user-attachments/assets/f5e0e963-5518-4f73-ab35-d7c3409e5970)](https://youtu.be/E8f4Zwy0NDI)
 
 ## 🚀 Uso rápido (Windows) — sin instalar nada
 1) Descarga **ThyroidAid.exe** desde [Releases](https://github.com/Lab-DSP-PUCP/thyroid_multimodal_app/releases). 
